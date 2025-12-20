@@ -16,19 +16,27 @@ public class Tokenizer {
     public List<Token> tokenize() {
         List<Token> tokens = new ArrayList<>();
 
-        for (; pos < script.length(); pos++) {
+        while (pos < script.length()) {
             skipWhitespaces();
-
+            if (pos >= script.length()) break;
             char c = script.charAt(pos);
-            switch (c) {
-                case '@':
-                    tokens.add(new SymbolToken(TokenType.AT, line, column));
-                    advance();
-                    break;
-                case ',':
-                    tokens.add(new SymbolToken(TokenType.COMMA, line, column));
-                    advance();
-                    break;
+
+            if (Character.isDigit(c) || c == '-' || c == '+') {
+                tokens.add(readNumber(line, column));
+            } else if (Character.isLetter(c)) {
+                tokens.add(readCommand(line, column));
+            } else if (c == '"') {
+                tokens.add(readString(line, column));
+            } else if (c == '{') {
+                tokens.add(readEnum(line, column));
+            } else if (c == '@') {
+                tokens.add(new SymbolToken(TokenType.AT, line, column));
+                advance();
+            } else if (c == ',') {
+                tokens.add(new SymbolToken(TokenType.COMMA, line, column));
+                advance();
+            } else {
+                throw new RuntimeException("Unexpected character '" + c + "' at " + line + ":" + column);
             }
         }
         return tokens;
@@ -48,6 +56,67 @@ public class Tokenizer {
         } else {
             column++;
         }
+    }
 
+    private NumberToken readNumber(int startLine, int startColumn) {
+        StringBuilder number = new StringBuilder();
+        char c = script.charAt(pos);
+        if (c == '-' || c == '+') {
+            advance();
+            number.append(c);
+        }
+
+        while (pos < script.length() && Character.isDigit(script.charAt(pos)) || script.charAt(pos) == '.') {
+            number.append(script.charAt(pos));
+            advance();
+        }
+        try {
+            return new NumberToken(Double.parseDouble(number.toString()), startLine, startColumn);
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Failed converting String '" + number.toString() + "' to number at " + line + ":" + column);
+        }
+    }
+
+    private CommandToken readCommand(int startLine, int startColumn) {
+        StringBuilder word = new StringBuilder();
+        while (pos < script.length() && (Character.isLetterOrDigit(script.charAt(pos)) || script.charAt(pos) == '_')) {
+            word.append(script.charAt(pos));
+            advance();
+        }
+        return new CommandToken(word.toString(), startLine, startColumn);
+    }
+
+    private StringToken readString(int startLine, int startColumn) {
+        StringBuilder str = new StringBuilder();
+        advance(); //skipping '"'
+        while (pos < script.length() && script.charAt(pos) != '"') {
+            str.append(script.charAt(pos));
+            advance();
+        }
+
+        if (pos >= script.length()) {
+            throw new RuntimeException("Unterminated string at " + startLine + ":" + startColumn);
+        }
+
+        advance(); // last character was '"', advancing to avoid reading the rest of the script
+        return new StringToken(str.toString(), startLine, startColumn);
+    }
+
+    private EnumToken readEnum(int startLine, int startColumn) {
+        StringBuilder str = new StringBuilder();
+        advance();
+
+        while (pos < script.length() && script.charAt(pos) != '}') {
+            System.out.println(pos);
+            str.append(script.charAt(pos));
+            advance();
+        }
+
+        if (pos >= script.length()) {
+            throw new RuntimeException("Unterminated enum at " + startLine + ":" + startColumn);
+        }
+
+        advance(); // last character was '}', advancing to avoid reading the rest of the script
+        return new EnumToken(str.toString(), startLine, startColumn);
     }
 }
