@@ -1,32 +1,18 @@
-
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-
-import java.io.File;
-import java.io.IOException;
+import javax.swing.*;
 
 public class Main {
-    public static void main(String[] args) throws IOException {
-        File out = new File("demo.pdf");
-
-        try (PDDocument doc = new PDDocument()) {
-            PDPage page = new PDPage();
-            doc.addPage(page);
-
-            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                cs.beginText();
-                cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-                cs.newLineAtOffset(50, 750);
-                cs.showText("Hello PDFScript (Skeleton)");
-                cs.endText();
-            }
-
-            doc.save(out);
+    public static void main(String[] args) {
+        // Set look and feel to system default
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            // Use default look and feel
         }
 
-        System.out.println("Wrote: " + out.getAbsolutePath());
+        // Launch the editor window on the Event Dispatch Thread
+        SwingUtilities.invokeLater(() -> {
+            EditorWindow editor = new EditorWindow();
+            editor.setVisible(true);
+        });
     }
 }
