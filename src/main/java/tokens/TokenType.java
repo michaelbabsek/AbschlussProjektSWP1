@@ -5,7 +5,7 @@ public enum TokenType {
     STRING,
     SYMBOL,
     NUMBER,
-
+    STAR,
     AT,
     COMMA,
 

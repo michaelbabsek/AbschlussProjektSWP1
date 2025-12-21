@@ -1,7 +1,6 @@
 package commands;
 
-import tokens.Token;
-import tokens.WordToken;
+import tokens.*;
 
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -34,13 +33,41 @@ public class Parser {
                 case "image", "import" -> parseImage();
                 default -> throw new ParseException("Unknown command: " + w.value(), pos);
             };
+
+            advance();
         }
         return commands;
     }
 
+    private boolean check(TokenType type) {
+        Token token = tokens.get(pos);
+        if (token instanceof SymbolToken s) return s.type() == type;
+        if (token instanceof EnumToken) return true;
+        if (token instanceof StringToken) return true;
+        if (token instanceof NumberToken) return true;
+        return token instanceof WordToken;
+    }
+
+    private Token getCurrentToken() {
+        return tokens.get(pos);
+    }
+
+    private void advance() {
+        pos++;
+    }
+
+    private void expect(TokenType type) throws ParseException {
+        if (!check(type)) {
+            throw new ParseException("Expected " + type + ", got: " + getCurrentToken(), pos);
+        }
+        advance();
+    }
+
     public Command parseOutput() throws ParseException {
-        // TODO: 21.12.25
-        return null;
+        advance();
+        expect(TokenType.STRING);
+        StringToken token = (StringToken) getCurrentToken();
+        return new OutputCommand(token.value());
     }
 
     public Command parseFont() throws ParseException {

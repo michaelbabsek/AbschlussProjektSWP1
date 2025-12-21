@@ -29,6 +29,8 @@ public class Tokenizer {
                 tokens.add(readString(line, column));
             } else if (c == '{') {
                 tokens.add(readEnum(line, column));
+            } else if (c == '*') {
+                tokens.add(new SymbolToken(TokenType.STAR, line, column));
             } else if (c == '@') {
                 tokens.add(new SymbolToken(TokenType.AT, line, column));
                 advance();
@@ -69,7 +71,11 @@ public class Tokenizer {
         while (pos < script.length() && Character.isDigit(script.charAt(pos)) || script.charAt(pos) == '.') {
             number.append(script.charAt(pos));
             advance();
+            if (pos >= script.length()) break;
         }
+
+
+
         try {
             return new NumberToken(Double.parseDouble(number.toString()), startLine, startColumn);
         } catch (NumberFormatException e) {
