@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Tokenizer {
-    String script = "";
+    String script;
     int pos = 0;
     int line = 1;
     int column = 1;
@@ -24,7 +24,7 @@ public class Tokenizer {
             if (Character.isDigit(c) || c == '-' || c == '+') {
                 tokens.add(readNumber(line, column));
             } else if (Character.isLetter(c)) {
-                tokens.add(readCommand(line, column));
+                tokens.add(readWord(line, column));
             } else if (c == '"') {
                 tokens.add(readString(line, column));
             } else if (c == '{') {
@@ -77,13 +77,13 @@ public class Tokenizer {
         }
     }
 
-    private CommandToken readCommand(int startLine, int startColumn) {
+    private WordToken readWord(int startLine, int startColumn) {
         StringBuilder word = new StringBuilder();
         while (pos < script.length() && (Character.isLetterOrDigit(script.charAt(pos)) || script.charAt(pos) == '_')) {
             word.append(script.charAt(pos));
             advance();
         }
-        return new CommandToken(word.toString(), startLine, startColumn);
+        return new WordToken(word.toString(), startLine, startColumn);
     }
 
     private StringToken readString(int startLine, int startColumn) {

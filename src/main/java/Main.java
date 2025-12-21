@@ -1,3 +1,5 @@
+import ui.EditorWindow;
+
 import javax.swing.*;
 
 public class Main {

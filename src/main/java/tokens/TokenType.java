@@ -1,7 +1,7 @@
 package tokens;
 
 public enum TokenType {
-    COMMAND,
+    WORD,
     STRING,
     SYMBOL,
     NUMBER,
