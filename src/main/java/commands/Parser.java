@@ -10,7 +10,6 @@ import java.util.Set;
 public class Parser {
     List<Token> tokens;
     int pos = 0;
-
     Set<String> COMMANDS = Set.of("output", "font", "print", "table", "control", "nextpage", "image");
 
     public Parser(List<Token> tokens) {
