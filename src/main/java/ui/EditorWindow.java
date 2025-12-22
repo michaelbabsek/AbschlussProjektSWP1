@@ -119,7 +119,7 @@ public class EditorWindow extends JFrame {
             List<Command> commands = parser.parse();
             commands.forEach(System.out::println);
         } catch (ParseException e){
-            System.out.println("failed parsing");
+            throw new RuntimeException(e.getMessage());
         }
 
     }

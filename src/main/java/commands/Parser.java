@@ -70,7 +70,7 @@ public class Parser {
     }
 
     private void expectString(Token token, String expected) throws ParseException {
-        if (!check(TokenType.STRING) || !check(TokenType.WORD)) {
+        if (!(check(TokenType.STRING) || check(TokenType.WORD))) {
             throw new ParseException("Expected " + token.type() + ", got: " + getCurrentToken(), pos);
         }
 
