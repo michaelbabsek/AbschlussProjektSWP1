@@ -33,13 +33,11 @@ public class Parser {
                 case "table" -> parseTable();
                 case "control" -> parseControl();
                 case "nextpage" -> new NextPageCommand();
-                case "image", "import" -> parseImage();
+                case "image" -> parseImage();
                 default -> throw new ParseException("Unknown command: " + w.value(), pos);
             };
 
             commands.add(cmd);
-
-            advance();
         }
         return commands;
     }
@@ -118,7 +116,7 @@ public class Parser {
 
     public boolean isCommand(Token token) {
         if (token instanceof WordToken) {
-            return COMMANDS.contains(((WordToken) token).value());
+            return COMMANDS.contains(((WordToken) token).value().toLowerCase());
         }
 
         return false;
@@ -136,7 +134,7 @@ public class Parser {
         return null;
     }
     public Command parsePrint() throws ParseException {
-        advance();
+        advance();  // skip "print"
 
         Position position = null;
         CellRef cellRef = null;
@@ -151,46 +149,40 @@ public class Parser {
 
             switch (token.type()) {
                 case TokenType.STRING -> {
-                    assert token instanceof StringToken;
                     text = ((StringToken) token).value();
+                    advance();
                 }
                 case TokenType.ENUM -> {
-                    String enumValue = "";
-                    try {
-                        assert token instanceof EnumToken;
-                        enumValue = ((EnumToken) token).value().toUpperCase();
-                        alignment = Alignment.valueOf(enumValue);
-                    } catch (IllegalArgumentException e) {
-                        throw new IllegalArgumentException("Illegal Argument: " + enumValue);
-                    }
+                    String enumValue = ((EnumToken) token).value().toUpperCase();
+                    alignment = Alignment.valueOf(enumValue);
+                    advance();
                 }
                 case TokenType.AT -> {
                     advance();
-                    Token currToken = getCurrentToken();
-                    switch (currToken.type()) {
-                        case TokenType.WORD -> {
-                            expectString(currToken, "cell");
-                            advance();
-                            cellRef = getCellRef();
-
-                        }
-                        case TokenType.NUMBER -> position = getPosition();
-
-                        default -> throw new ParseException("Unexpected token " + token + " at " + token.line() + ":" + token.column(), pos);
+                    if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
+                        advance();
+                        cellRef = getCellRef();
+                    } else {
+                        position = getPosition();
                     }
-
                 }
-                case TokenType.NUMBER -> {
-                    assert token instanceof NumberToken;
-                    width = ((NumberToken) token).value();
+                case TokenType.WORD -> {
+                    String word = ((WordToken) token).value().toLowerCase();
+                    if (word.equals("width")) {
+                        advance();
+                        width = ((NumberToken) getCurrentToken()).value();
+                        advance();
+                    } else {
+                        throw new ParseException("Unexpected word: " + word, pos);
+                    }
                 }
-                default ->
-                        throw new ParseException("Unexpected token " + token + " at " + token.line() + ":" + token.column(), pos);
+                default -> throw new ParseException("Unexpected token: " + token, pos);
             }
-            advance();
         }
 
-        if (text == null) throw new ParseException("print requires text to not be null", pos);
+        if (text == null) {
+            throw new ParseException("print requires text", pos);
+        }
 
         return new PrintCommand(position, cellRef, width, alignment, text);
     }
@@ -203,7 +195,33 @@ public class Parser {
         return null;
     }
     public Command parseImage() throws ParseException {
-        // TODO: 21.12.25
-        return null;
+        advance(); // skip "image"
+
+        String fileName = null;
+        Position position = null;
+        CellRef cellRef = null;
+        Float width = null;
+        Float height = null;
+
+        while (pos < tokens.size()) {
+            Token token = getCurrentToken();
+            switch (token.type()) {
+                case TokenType.AT -> {
+                    advance();
+                    if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
+                        advance();
+                        cellRef = getCellRef();
+                    } else {
+                        position = getPosition();
+                    }
+                }
+            }
+        }
+
+        if (fileName == null) {
+            throw new ParseException("image requires file name", pos);
+        }
+
+        return new ImageCommand(position, cellRef, width, height, fileName);
     }
 }
