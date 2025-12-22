@@ -32,7 +32,7 @@ public class Parser {
                 case "print" -> parsePrint();
                 case "table" -> parseTable();
                 case "control" -> parseControl();
-                case "nextpage" -> new NextPageCommand();
+                case "nextpage" -> parseNextPage();
                 case "image" -> parseImage();
                 default -> throw new ParseException("Unknown command: " + w.value(), pos);
             };
@@ -95,7 +95,6 @@ public class Parser {
 
         expect(TokenType.NUMBER);
         float b = ((NumberToken) getCurrentToken()).value();
-        advance();
 
         return new Pair(a, b);
     }
@@ -122,6 +121,11 @@ public class Parser {
         }
 
         return false;
+    }
+
+    public Command parseNextPage() {
+        advance();
+        return new NextPageCommand();
     }
 
     public Command parseOutput() throws ParseException {
@@ -215,16 +219,20 @@ public class Parser {
                     } else {
                         position = parsePosition();
                     }
+                    advance();
                 }
 
                 case TokenType.WORD -> {
-                    if (((WordToken) getCurrentToken()).value().equalsIgnoreCase("size")) {
-                        advance();
-                        size = parseSize();
-                    }
+                    expectString(getCurrentToken(), "size");
+                    advance();
+                    size = parseSize();
+                    advance();
                 }
 
-                case TokenType.STRING -> fileName = ((StringToken) getCurrentToken()).value();
+                case TokenType.STRING -> {
+                    fileName = ((StringToken) getCurrentToken()).value();
+                    advance();
+                }
 
                 default -> throw new ParseException("Unexpected token: " + token, pos);
             }
