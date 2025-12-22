@@ -77,7 +77,7 @@ public class Tokenizer {
 
 
         try {
-            return new NumberToken(Double.parseDouble(number.toString()), startLine, startColumn);
+            return new NumberToken(Float.parseFloat(number.toString()), startLine, startColumn);
         } catch (NumberFormatException e) {
             throw new RuntimeException("Failed converting String '" + number.toString() + "' to number at " + line + ":" + column);
         }
