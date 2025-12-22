@@ -85,34 +85,36 @@ public class Parser {
         }
     }
 
-    public Position getPosition() throws ParseException {
+    private Pair parsePair() throws ParseException {
         expect(TokenType.NUMBER);
-        float x = ((NumberToken) getCurrentToken()).value();
+        float a = ((NumberToken) getCurrentToken()).value();
         advance();
 
         expect(TokenType.COMMA);
         advance();
 
         expect(TokenType.NUMBER);
-        float y = ((NumberToken) getCurrentToken()).value();
+        float b = ((NumberToken) getCurrentToken()).value();
         advance();
 
-        return new Position(x, y);
+        return new Pair(a, b);
     }
-    public CellRef getCellRef() throws ParseException {
-        expect(TokenType.NUMBER);
-        float column = ((NumberToken) getCurrentToken()).value();
-        advance();
 
-        expect(TokenType.COMMA);
-        advance();
-
-        expect(TokenType.NUMBER);
-        float row = ((NumberToken) getCurrentToken()).value();
-        advance();
-
-        return new CellRef((int) column, (int) row);
+    private Position parsePosition() throws ParseException {
+        Pair p = parsePair();
+        return new Position(p.a(), p.b());
     }
+
+    private Size parseSize() throws ParseException {
+        Pair p = parsePair();
+        return new Size((int) p.a(), (int) p.b());
+    }
+
+    private CellRef parseCellRef() throws ParseException {
+        Pair p = parsePair();
+        return new CellRef((int) p.a(), (int) p.b());
+    }
+
 
     public boolean isCommand(Token token) {
         if (token instanceof WordToken) {
@@ -161,9 +163,9 @@ public class Parser {
                     advance();
                     if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
                         advance();
-                        cellRef = getCellRef();
+                        cellRef = parseCellRef();
                     } else {
-                        position = getPosition();
+                        position = parsePosition();
                     }
                 }
                 case TokenType.WORD -> {
@@ -200,8 +202,7 @@ public class Parser {
         String fileName = null;
         Position position = null;
         CellRef cellRef = null;
-        Float width = null;
-        Float height = null;
+        Size size = null;
 
         while (pos < tokens.size()) {
             Token token = getCurrentToken();
@@ -210,18 +211,30 @@ public class Parser {
                     advance();
                     if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
                         advance();
-                        cellRef = getCellRef();
+                        cellRef = parseCellRef();
                     } else {
-                        position = getPosition();
+                        position = parsePosition();
                     }
                 }
+
+                case TokenType.WORD -> {
+                    if (((WordToken) getCurrentToken()).value().equalsIgnoreCase("size")) {
+                        advance();
+                        size = parseSize();
+                    }
+                }
+
+                case TokenType.STRING -> fileName = ((StringToken) getCurrentToken()).value();
+
+                default -> throw new ParseException("Unexpected token: " + token, pos);
             }
+
         }
 
         if (fileName == null) {
             throw new ParseException("image requires file name", pos);
         }
 
-        return new ImageCommand(position, cellRef, width, height, fileName);
+        return new ImageCommand(position, cellRef, size, fileName);
     }
 }
