@@ -41,9 +41,23 @@ public class PdfExecutor {
     }
 
     private void executeOutput(OutputCommand cmd) throws IOException {
-        document = new PDDocument();
-        currentFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-        newPage();
+        File file= new File(cmd.filename());
+       try {
+           if (file.exists()) {
+
+               if (!file.delete()) {
+                   throw new IOException("Delete failed " + file.getAbsolutePath());
+               }
+           }
+           document = new PDDocument();
+           PDPage page = new PDPage(PDRectangle.A4);
+           document.addPage(page);
+       }catch (IOException e) {
+           System.err.println(e.getMessage());
+           throw e;
+       }
+
+
     }
 
     private void executeFont(FontCommand cmd) throws IOException {
