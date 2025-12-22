@@ -58,7 +58,10 @@ public class EditorWindow extends JFrame {
         });
 
         // Add placeholder text
-        codeEditor.setText("print @cell 50, 50 \"Hello\"");
+        codeEditor.setText("output \"Myfile.pdf\"\n" +
+                "font size 12 style bold colour red \"Times New Roman\"\n" +
+                "print @ 10,10 \"Hier kommt ein Text\"\n" +
+                "table columns 5 rows 7 width 10,10,20,20,50 height 20,12* line yellow background 0xA0A0A0 thickness 2");
 
         // Scroll pane for the editor
         JScrollPane scrollPane = new JScrollPane(codeEditor);

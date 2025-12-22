@@ -31,6 +31,7 @@ public class Tokenizer {
                 tokens.add(readEnum(line, column));
             } else if (c == '*') {
                 tokens.add(new SymbolToken(TokenType.STAR, line, column));
+                advance();
             } else if (c == '@') {
                 tokens.add(new SymbolToken(TokenType.AT, line, column));
                 advance();
@@ -63,24 +64,50 @@ public class Tokenizer {
     private NumberToken readNumber(int startLine, int startColumn) {
         StringBuilder number = new StringBuilder();
         char c = script.charAt(pos);
+
+        // Vorzeichen
         if (c == '-' || c == '+') {
-            advance();
             number.append(c);
+            advance();
         }
 
-        while (pos < script.length() && Character.isDigit(script.charAt(pos)) || script.charAt(pos) == '.') {
+        // Hex: 0xA0A0A0
+        if (pos < script.length() && script.charAt(pos) == '0'
+                && pos + 1 < script.length() && script.charAt(pos + 1) == 'x') {
             number.append(script.charAt(pos));
             advance();
-            if (pos >= script.length()) break;
+            number.append(script.charAt(pos));
+            advance();
+            while (pos < script.length() && isHexChar(script.charAt(pos))) {
+                number.append(script.charAt(pos));
+                advance();
+            }
+            return new NumberToken(0, number.toString(), startLine, startColumn);
         }
 
+        // Normale Zahl
+        while (pos < script.length() && (Character.isDigit(script.charAt(pos)) || script.charAt(pos) == '.')) {
+            number.append(script.charAt(pos));
+            advance();
+        }
 
+        // Wildcard *
+        if (pos < script.length() && script.charAt(pos) == '*') {
+            number.append(script.charAt(pos));
+            advance();
+        }
 
         try {
-            return new NumberToken(Float.parseFloat(number.toString()), startLine, startColumn);
+            String raw = number.toString();
+            String numPart = raw.endsWith("*") ? raw.substring(0, raw.length() - 1) : raw;
+            return new NumberToken(Float.parseFloat(numPart), raw, startLine, startColumn);
         } catch (NumberFormatException e) {
-            throw new RuntimeException("Failed converting String '" + number.toString() + "' to number at " + line + ":" + column);
+            throw new RuntimeException("Failed converting String '" + number + "' to number at " + line + ":" + column);
         }
+    }
+
+    private boolean isHexChar(char c) {
+        return Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
     private WordToken readWord(int startLine, int startColumn) {

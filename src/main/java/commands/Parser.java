@@ -43,6 +43,7 @@ public class Parser {
     }
 
     private boolean check(TokenType type) {
+        if (isAtEnd()) return false;
         Token token = tokens.get(pos);
         return switch (type) {
             case AT, COMMA, STAR -> token instanceof SymbolToken s && s.type() == type;
@@ -59,6 +60,10 @@ public class Parser {
 
     private void advance() {
         pos++;
+    }
+
+    private boolean isAtEnd() {
+        return pos >= tokens.size();
     }
 
     private void expect(TokenType type) throws ParseException {
@@ -95,6 +100,7 @@ public class Parser {
 
         expect(TokenType.NUMBER);
         float b = ((NumberToken) getCurrentToken()).value();
+        advance();
 
         return new Pair(a, b);
     }
@@ -132,13 +138,10 @@ public class Parser {
         advance();
         expect(TokenType.STRING);
         StringToken token = (StringToken) getCurrentToken();
+        advance();
         return new OutputCommand(token.value());
     }
 
-    public Command parseFont() throws ParseException {
-        // TODO: 21.12.25
-        return null;
-    }
     public Command parsePrint() throws ParseException {
         advance();  // skip "print"
 
@@ -148,7 +151,7 @@ public class Parser {
         Alignment alignment = null;
         String text = null;
 
-        while (pos < tokens.size()) {
+        while (!isAtEnd()) {
             Token token = getCurrentToken();
 
             if (isCommand(token)) break;
@@ -192,24 +195,148 @@ public class Parser {
 
         return new PrintCommand(position, cellRef, width, alignment, text);
     }
-    public Command parseTable() throws ParseException {
-        // TODO: 21.12.25
-        return null;
-    }
-    public Command parseControl() throws ParseException {
-        // TODO: 21.12.25
-        return null;
-    }
-    public Command parseImage() throws ParseException {
-        advance(); // skip "image"
+    public Command parseFont() throws ParseException {
+        advance();
 
-        String fileName = null;
+        Integer size = null;
+        FontStyle style = null;
+        String colour = null;
+        String fontName = null;
+
+        while (!isAtEnd()) {
+            Token token = getCurrentToken();
+
+            if (isCommand(token)) break;
+
+            switch (token.type()) {
+                case TokenType.STRING -> {
+                    fontName = ((StringToken) token).value();
+                    advance();
+                }
+                case TokenType.WORD -> {
+                    String word = ((WordToken) token).value().toLowerCase();
+                    switch (word) {
+                        case "size" -> {
+                            advance();
+                            size = (int) ((NumberToken) getCurrentToken()).value();
+                            advance();
+                        }
+                        case "style" -> {
+                            advance();
+                            String styleValue = ((WordToken) getCurrentToken()).value().toUpperCase();
+                            style = FontStyle.valueOf(styleValue);
+                            advance();
+                        }
+                        case "colour", "color" -> {
+                            advance();
+                            Token colourToken = getCurrentToken();
+                            if (colourToken instanceof NumberToken n) {
+                                colour = String.valueOf(n.value());
+                            } else if (colourToken instanceof WordToken w) {
+                                colour = w.value();
+                            }
+                            advance();
+                        }
+                        default -> throw new ParseException("Unexpected word: " + word, pos);
+                    }
+                }
+                default -> throw new ParseException("Unexpected token: " + token, pos);
+            }
+        }
+
+        if (size == null) {
+            throw new ParseException("font requires size", pos);
+        }
+
+        return new FontCommand(size, style, colour, fontName);
+    }
+
+    public Command parseTable() throws ParseException {
+        advance();
+
+        Integer columns = null;
+        Integer rows = null;
+        List<String> widths = null;
+        List<String> heights = null;
+        String lineColour = null;
+        String background = null;
+        Float thickness = null;
+
+        while (!isAtEnd()) {
+            Token token = getCurrentToken();
+
+            if (isCommand(token)) break;
+
+            switch (token.type()) {
+                case TokenType.WORD -> {
+                    String word = ((WordToken) token).value().toLowerCase();
+                    switch (word) {
+                        case "columns" -> {
+                            advance();
+                            columns = (int) ((NumberToken) getCurrentToken()).value();
+                            advance();
+                        }
+                        case "rows" -> {
+                            advance();
+                            rows = (int) ((NumberToken) getCurrentToken()).value();
+                            advance();
+                        }
+                        case "width" -> {
+                            advance();
+                            widths = parseNumberList();
+                        }
+                        case "height" -> {
+                            advance();
+                            heights = parseNumberList();
+                        }
+                        case "line" -> {
+                            advance();
+                            Token colourToken = getCurrentToken();
+                            if (colourToken instanceof NumberToken n) {
+                                lineColour = String.valueOf(n.value());
+                            } else if (colourToken instanceof WordToken w) {
+                                lineColour = w.value();
+                            }
+                            advance();
+                        }
+                        case "background" -> {
+                            advance();
+                            Token colourToken = getCurrentToken();
+                            if (colourToken instanceof NumberToken n) {
+                                background = String.valueOf(n.value());
+                            } else if (colourToken instanceof WordToken w) {
+                                background = w.value();
+                            }
+                            advance();
+                        }
+                        case "thickness" -> {
+                            advance();
+                            thickness = ((NumberToken) getCurrentToken()).value();
+                            advance();
+                        }
+                        default -> throw new ParseException("Unexpected word: " + word, pos);
+                    }
+                }
+                default -> throw new ParseException("Unexpected token: " + token, pos);
+            }
+        }
+
+        return new TableCommand(columns, rows, widths, heights, lineColour, background, thickness);
+    }
+
+    public Command parseControl() throws ParseException {
+        advance();
+
         Position position = null;
         CellRef cellRef = null;
-        Size size = null;
+        ControlType type = null;
+        String content = null;
 
-        while (pos < tokens.size()) {
+        while (!isAtEnd()) {
             Token token = getCurrentToken();
+
+            if (isCommand(token)) break;
+
             switch (token.type()) {
                 case TokenType.AT -> {
                     advance();
@@ -219,24 +346,99 @@ public class Parser {
                     } else {
                         position = parsePosition();
                     }
+                }
+                case TokenType.ENUM -> {
+                    String enumValue = ((EnumToken) token).value().toUpperCase();
+                    type = ControlType.valueOf(enumValue);
                     advance();
                 }
+                case TokenType.WORD -> {
+                    String word = ((WordToken) token).value().toLowerCase();
+                    switch (word) {
+                        case "type" -> {
+                            advance();
+                            String typeValue = ((WordToken) getCurrentToken()).value().toUpperCase();
+                            type = ControlType.valueOf(typeValue);
+                            advance();
+                        }
+                        case "content" -> {
+                            advance();
+                            content = ((StringToken) getCurrentToken()).value();
+                            advance();
+                        }
+                        default -> throw new ParseException("Unexpected word: " + word, pos);
+                    }
+                }
+                case TokenType.STRING -> {
+                    content = ((StringToken) token).value();
+                    advance();
+                }
+                default -> throw new ParseException("Unexpected token: " + token, pos);
+            }
+        }
 
+        return new ControlCommand(position, cellRef, type, content);
+    }
+
+    private List<String> parseNumberList() throws ParseException {
+        List<String> values = new ArrayList<>();
+
+        while (check(TokenType.NUMBER)) {
+            NumberToken token = (NumberToken) getCurrentToken();
+            String value = token.rawValue();
+            advance();
+
+            // Wildcard *
+            if (check(TokenType.STAR)) {
+                value += "*";
+                advance();
+            }
+
+            values.add(value);
+
+            if (check(TokenType.COMMA)) {
+                advance();
+            } else {
+                break;
+            }
+        }
+
+        return values;
+    }
+    public Command parseImage() throws ParseException {
+        advance();
+
+        String fileName = null;
+        Position position = null;
+        CellRef cellRef = null;
+        Size size = null;
+
+        while (!isAtEnd()) {
+            Token token = getCurrentToken();
+
+            if (isCommand(token)) break;
+
+            switch (token.type()) {
+                case TokenType.AT -> {
+                    advance();
+                    if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
+                        advance();
+                        cellRef = parseCellRef();
+                    } else {
+                        position = parsePosition();
+                    }
+                }
                 case TokenType.WORD -> {
                     expectString(getCurrentToken(), "size");
                     advance();
                     size = parseSize();
-                    advance();
                 }
-
                 case TokenType.STRING -> {
                     fileName = ((StringToken) getCurrentToken()).value();
                     advance();
                 }
-
                 default -> throw new ParseException("Unexpected token: " + token, pos);
             }
-
         }
 
         if (fileName == null) {
