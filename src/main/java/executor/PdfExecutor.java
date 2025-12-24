@@ -61,11 +61,14 @@ public class PdfExecutor {
     }
 
     private void executeFont(FontCommand cmd) throws IOException {
-        // TODO
+
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
-        // TODO
+        if (document == null || currentPage == null) {
+            throw new IOException("print ohne output");
+        }
+
     }
 
     private void executeTable(TableCommand cmd) throws IOException {
@@ -81,16 +84,25 @@ public class PdfExecutor {
     }
 
     private void executeImage(ImageCommand cmd) throws IOException {
-        // TODO
+        if (document == null || currentPage == null) {
+            throw new IOException("Image without Output");
+        }
+
+
     }
 
     private void newPage() throws IOException {
-        if (contentStream != null) {
-            contentStream.close();
+        if (document  == null) {
+            throw new IOException("Document is null");
+
         }
-        currentPage = new PDPage(PDRectangle.A4);
-        document.addPage(currentPage);
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        currentPage = page;
         contentStream = new PDPageContentStream(document, currentPage);
+
+        //Tabelle wird vergessen ka was er meint aber ist so in der PDF
+        currentTable= null;
     }
 
     private void close() throws IOException {
