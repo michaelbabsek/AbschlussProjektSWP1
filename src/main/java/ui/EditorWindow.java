@@ -2,6 +2,7 @@ package ui;
 
 import commands.Command;
 import commands.Parser;
+import executor.PdfExecutor;
 import tokens.Token;
 import tokens.Tokenizer;
 
@@ -10,6 +11,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.io.IOException;
 import java.lang.reflect.Parameter;
 import java.text.ParseException;
 import java.util.List;
@@ -121,10 +123,12 @@ public class EditorWindow extends JFrame {
         try {
             List<Command> commands = parser.parse();
             commands.forEach(System.out::println);
-        } catch (ParseException e){
+
+            PdfExecutor pdfExecutor = new PdfExecutor();
+            pdfExecutor.execute(commands);
+        } catch (ParseException | IOException | NoSuchFieldException | IllegalAccessException e){
             throw new RuntimeException(e.getMessage());
         }
-
     }
 
     public String getCode() {

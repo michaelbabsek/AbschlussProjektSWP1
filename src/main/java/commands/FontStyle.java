@@ -4,5 +4,7 @@ public enum FontStyle {
     REGULAR,
     BOLD,
     ITALIC,
-    BOLD_ITALIC
+    BOLD_ITALIC,
+    OBLIQUE,
+    BOLD_OBLIQUE
 }
