@@ -53,6 +53,7 @@ public class PdfExecutor {
            }
            document = new PDDocument();
            PDPage page = new PDPage(PDRectangle.A4);
+           PDRectangle rect = page.getMediaBox();
            document.addPage(page);
        }catch (IOException e) {
            System.err.println(e.getMessage());
@@ -88,9 +89,16 @@ public class PdfExecutor {
             startX = currentX;
             startY = currentY;
         }
+
         Alignment alignment = cmd.alignment() != null
                 ? cmd.alignment()
                 : Alignment.LEFT;
+
+        float offsetX = switch (alignment) {
+            case LEFT -> 0;
+            case CENTER -> -cmd.width() / 2f;
+            case RIGHT -> -cmd.width() ;
+        };
 
         float maxWidth = cmd.width() != null
                 ? cmd.width()
