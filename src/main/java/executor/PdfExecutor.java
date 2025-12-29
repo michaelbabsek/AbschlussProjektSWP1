@@ -19,6 +19,7 @@ public class PdfExecutor {
     private PDPageContentStream contentStream;
 
     // Aktueller Zustand
+    private File outputFile;
     private float currentX;
     private float currentY;
     private PDType1Font currentFont;
@@ -27,6 +28,8 @@ public class PdfExecutor {
     private TableCommand currentTable;
 
     public void execute(List<Command> commands) throws IOException {
+        document = createDocument();
+
         for (Command cmd : commands) {
             switch (cmd) {
                 case OutputCommand c -> executeOutput(c);
@@ -40,27 +43,32 @@ public class PdfExecutor {
         }
 
         close();
+        saveDocument();
     }
 
-    private void executeOutput(OutputCommand cmd) throws IOException {
-        File file= new File(cmd.filename());
-       try {
-           if (file.exists()) {
+    private void executeOutput(OutputCommand cmd) {
+        if (outputFile != null) {
+            throw new RuntimeException("Output already specified");
+        }
 
-               if (!file.delete()) {
-                   throw new IOException("Delete failed " + file.getAbsolutePath());
-               }
-           }
-           document = new PDDocument();
-           PDPage page = new PDPage(PDRectangle.A4);
-           PDRectangle rect = page.getMediaBox();
-           document.addPage(page);
-       }catch (IOException e) {
-           System.err.println(e.getMessage());
-           throw e;
-       }
+        File file = new File(cmd.filename());
+        if (file.exists()) {
+            if (!file.delete()) {
+                throw new RuntimeException("File already exists and cannot be deleted: " + cmd.filename());
+            }
+        }
+        outputFile = file;
+    }
 
+    private PDDocument createDocument() {
+        document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        return document;
+    }
 
+    private void saveDocument() throws IOException {
+        document.save(outputFile);
     }
 
     private void executeFont(FontCommand cmd) throws IOException {
