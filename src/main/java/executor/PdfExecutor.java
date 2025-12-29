@@ -19,6 +19,8 @@ public class PdfExecutor {
     private PDPageContentStream contentStream;
 
     // Aktueller Zustand
+    private float currentX;
+    private float currentY;
     private PDType1Font currentFont;
     private int currentFontSize = 12;
     private Color currentColour = Color.BLACK;
@@ -68,6 +70,31 @@ public class PdfExecutor {
         if (document == null || currentPage == null) {
             throw new IOException("print ohne output");
         }
+        float startX;
+        float startY;
+
+        if (cmd.cell() != null){
+            if (currentTable == null) {
+                throw new IOException("print @ cell without table)");
+            }
+            //hier soll rein in welche cell der currenttable geschrieben werden soll
+         //   startX= CellRef();
+           // startY= pos.y();
+
+        }else if (cmd.position() != null) {
+            startX = cmd.position().x();
+            startY = cmd.position().y();
+        } else {
+            startX = currentX;
+            startY = currentY;
+        }
+        Alignment alignment = cmd.alignment() != null
+                ? cmd.alignment()
+                : Alignment.LEFT;
+
+        float maxWidth = cmd.width() != null
+                ? cmd.width()
+                : Float.MAX_VALUE;
 
     }
 
