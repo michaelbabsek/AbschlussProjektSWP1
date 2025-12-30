@@ -5,6 +5,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -182,6 +183,8 @@ public class PdfExecutor {
         } else {
             printText(cmd.position(), cmd.text());
         }
+
+
     }
 
     private void executeTable(TableCommand cmd) throws IOException {
@@ -198,7 +201,22 @@ public class PdfExecutor {
     }
 
     private void executeImage(ImageCommand cmd) throws IOException {
-        // TODO
+        try{
+        PDImageXObject image = PDImageXObject.createFromFile(cmd.filename(), document);
+        if (cmd.position() != null) {
+            state.setPosition(cmd.position().x(), cmd.position().y());
+        }
+        if (cmd.size() != null) {
+            image.setHeight(cmd.size().height());
+            image.setWidth(cmd.size().width());
+
+        }else{
+            image.getHeight();
+            image.getWidth();
+
+        }} catch (Exception e) {
+            throw new IOException("No Image found " +  cmd.filename());
+        }
     }
 
     private void closeContentStream() throws IOException {
