@@ -5,47 +5,61 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.documentinterchange.taggedpdf.PDTableAttributeObject;
-import org.apache.pdfbox.pdmodel.font.*;
-import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
 
-import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
+import java.util.LinkedList;
 import java.util.List;
 
 public class PdfExecutor {
+    // Konfiguration (unveränderlich)
+    private final PageConfig config;
+
+    // Dokument-Ressourcen (Lifecycle: execute-Methode)
     private PDDocument document;
-    private PDPage currentPage;
     private PDPageContentStream contentStream;
 
-    // Aktueller Zustand
+    // Zustand
+    private RenderState state;
     private File outputFile;
-    private float currentX = 0;
-    private float currentY = 0;
-    private PDType1Font currentFont = new PDType1Font((Standard14Fonts.FontName.HELVETICA));
-    private FontStyle currentFontStyle = FontStyle.REGULAR;
-    private int currentFontSize = 12;
-    private Color currentColour = Color.BLACK;
-    private PDTableAttributeObject currentTable;
 
-    public void execute(List<Command> commands) throws IOException, NoSuchFieldException, IllegalAccessException {
-        document = createDocument();
+    public PdfExecutor() {
+        this(PageConfig.DEFAULT);
+    }
 
-        for (Command cmd : commands) {
-            switch (cmd) {
-                case OutputCommand c -> executeOutput(c);
-                case FontCommand c -> executeFont(c);
-                case PrintCommand c -> executePrint(c);
-                case TableCommand c -> executeTable(c);
-                case ControlCommand c -> executeControl(c);
-                case NextPageCommand c -> executeNextPage();
-                case ImageCommand c -> executeImage(c);
+    public PdfExecutor(PageConfig config) {
+        this.config = config;
+    }
+
+    public void execute(List<Command> commands) throws IOException {
+        try {
+            document = new PDDocument();
+            state = new RenderState(config);
+            outputFile = null;
+
+            addPage();
+
+            for (Command cmd : commands) {
+                switch (cmd) {
+                    case OutputCommand c -> executeOutput(c);
+                    case FontCommand c -> executeFont(c);
+                    case PrintCommand c -> executePrint(c);
+                    case TableCommand c -> executeTable(c);
+                    case ControlCommand c -> executeControl(c);
+                    case NextPageCommand c -> executeNextPage();
+                    case ImageCommand c -> executeImage(c);
+                }
             }
-        }
 
-        saveDocument();
+            saveDocument();
+        } finally {
+            closeContentStream();
+            if (document != null) {
+                document.close();
+            }
+            document = null;
+            state = null;
+        }
     }
 
     private void executeOutput(OutputCommand cmd) {
@@ -54,122 +68,122 @@ public class PdfExecutor {
         }
 
         File file = new File(cmd.filename());
-        if (file.exists()) {
-            if (!file.delete()) {
-                throw new RuntimeException("File already exists and cannot be deleted: " + cmd.filename());
-            }
+        if (file.exists() && !file.delete()) {
+            throw new RuntimeException("File already exists and cannot be deleted: " + cmd.filename());
         }
         outputFile = file;
     }
 
-    private PDDocument createDocument() throws IOException {
-        document = new PDDocument();
-        addPage();
-
-        try {
-            updateContentStream();
-        } catch (IOException e) {
-            throw new IOException("Failed to create new PDF document");
-        }
-        return document;
-    }
-
     private void saveDocument() throws IOException {
+        if (outputFile == null) {
+            throw new RuntimeException("Output file not specified");
+        }
         closeContentStream();
         document.save(outputFile);
     }
 
-    private void addPage() {
-        if (document == null) {
-            throw new RuntimeException("Document is null");
-        }
-        PDPage page = new PDPage(PDRectangle.A4);
+    private void addPage() throws IOException {
+        closeContentStream();
+        PDPage page = new PDPage(config.pageSize());
         document.addPage(page);
-        currentPage = page;
+        contentStream = new PDPageContentStream(document, page);
     }
 
-    public Color parseColor(String input) {
-        if (input == null) throw new IllegalArgumentException("Color cannot be null");
-
-        input = input.trim();
-        Color color = null;
-
-        try {
-            if (input.startsWith("#")) {
-                color = Color.decode(input);
-            } else if (input.matches("[0-9a-fA-F]{6}")) {
-                color = Color.decode("#" + input);
-            }
-        } catch (NumberFormatException ignored) {}
-
-        if (color == null) {
-            try {
-                Field field = Color.class.getField(input.toUpperCase());
-                color = (Color) field.get(null);
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new IllegalArgumentException("Invalid color: " + input);
-            }
-        }
-
-        return color;
-    }
     private void executeFont(FontCommand cmd) {
-        StringBuilder fontString = new StringBuilder();
-        fontString.append(cmd.fontName());
-
-        switch (cmd.style()){
-            case BOLD -> fontString.append("_bold");
-            case ITALIC -> fontString.append("_italic");
-            case BOLD_ITALIC -> fontString.append("_bold_italic");
-            case OBLIQUE -> fontString.append("_oblique");
-            case BOLD_OBLIQUE -> fontString.append("_bold_oblique");
-        }
-
-        try {
-            currentFont = new PDType1Font(Standard14Fonts.FontName.valueOf(fontString.toString().toUpperCase()));
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Font not found: " + fontString);
-        }
-
-        currentColour = parseColor(cmd.colour());
-        currentFontSize = cmd.size();
-
-        // TODO: 29.12.25
+        state.applyFont(cmd.fontName(), cmd.style(), cmd.colour(), cmd.size());
     }
 
-    private void printTextToCell(CellRef cell, String text) {
-        // TODO: 29.12.25
+    private List<String> parseLines(String input) throws IOException {
+        float maxWidth = config.textWidth();
+        List<String> result = new LinkedList<>();
+        String[] lines = input.split(System.lineSeparator());
+
+        for (String line : lines) {
+            String[] words = line.split(" ");
+            StringBuilder currentLine = new StringBuilder();
+
+            for (String word : words) {
+                float wordWidth = state.fontSize() * state.font().getStringWidth(word) / 1000.0f;
+
+                if (wordWidth > maxWidth) {
+                    if (!currentLine.isEmpty()) {
+                        result.add(currentLine.toString());
+                    }
+
+                    StringBuilder chunk = new StringBuilder();
+                    for (char c : word.toCharArray()) {
+                        float chunkWidth = state.fontSize() * state.font().getStringWidth(chunk.toString() + c) / 1000.0f;
+                        if (chunkWidth > maxWidth && !chunk.isEmpty()) {
+                            result.add(chunk.toString());
+                            chunk = new StringBuilder();
+                        }
+                        chunk.append(c);
+                    }
+                    currentLine = chunk;
+                    continue;
+                }
+
+                String testStr = currentLine.isEmpty() ? word : currentLine + " " + word;
+                float lineWidth = state.fontSize() * state.font().getStringWidth(testStr) / 1000.0f;
+
+                if (lineWidth > maxWidth) {
+                    result.add(currentLine.toString());
+                    currentLine = new StringBuilder(word);
+                } else {
+                    currentLine = new StringBuilder(testStr);
+                }
+            }
+
+            if (!currentLine.isEmpty()) {
+                result.add(currentLine.toString());
+            }
+        }
+
+        return result;
     }
 
     private void printText(Position pos, String text) throws IOException {
-        contentStream.beginText();
+        List<String> lines = parseLines(text);
 
         if (pos != null) {
-            currentX = pos.x();
-            currentY = pos.y();
-            contentStream.newLineAtOffset(currentX, currentY);
-        } else {
-            contentStream.newLineAtOffset(currentX, currentY);
+            state.setPosition(pos.x(), pos.y());
         }
 
-        contentStream.setFont(currentFont, currentFontSize);
-        contentStream.setNonStrokingColor(currentColour);
+        contentStream.beginText();
+        contentStream.setFont(state.font(), state.fontSize());
+        contentStream.setNonStrokingColor(state.color());
+        contentStream.newLineAtOffset(state.x(), state.y());
 
-        contentStream.showText(text);
+        for (String line : lines) {
+            state.newLine();
+
+            if (state.isBelowMargin(config)) {
+                contentStream.endText();
+                addPage();
+                state.resetToTop(config);
+
+                contentStream.beginText();
+                contentStream.setFont(state.font(), state.fontSize());
+                contentStream.setNonStrokingColor(state.color());
+
+                state.newLine();
+                contentStream.newLineAtOffset(state.x(), state.y());
+            } else {
+                contentStream.newLineAtOffset(0, -state.leading());
+            }
+
+            contentStream.showText(line);
+        }
         contentStream.endText();
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
-        if (document == null || currentPage == null) {
-            throw new IOException("print ohne output");
-        }
-
         if (cmd.position() != null && cmd.cell() != null) {
-            throw new RuntimeException("position and cell cannot both be specified: " + cmd);
+            throw new RuntimeException("position and cell cannot both be specified");
         }
 
         if (cmd.cell() != null) {
-            printTextToCell(cmd.cell(), cmd.text());
+            // TODO: printTextToCell
         } else {
             printText(cmd.position(), cmd.text());
         }
@@ -184,29 +198,18 @@ public class PdfExecutor {
     }
 
     private void executeNextPage() throws IOException {
-        if (document  == null) {
-            throw new IOException("Document is null");
-        }
-
         addPage();
-        updateContentStream();
-        currentTable = null;
+        state.resetToTop(config);
     }
 
     private void executeImage(ImageCommand cmd) throws IOException {
-        if (document == null || currentPage == null) {
-            throw new IOException("Image without Output");
-        }
+        // TODO
     }
 
     private void closeContentStream() throws IOException {
         if (contentStream != null) {
             contentStream.close();
+            contentStream = null;
         }
-    }
-
-    private void updateContentStream() throws IOException {
-        closeContentStream();
-        contentStream = new PDPageContentStream(document, currentPage);
     }
 }

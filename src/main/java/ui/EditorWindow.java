@@ -126,7 +126,7 @@ public class EditorWindow extends JFrame {
 
             PdfExecutor pdfExecutor = new PdfExecutor();
             pdfExecutor.execute(commands);
-        } catch (ParseException | IOException | NoSuchFieldException | IllegalAccessException e){
+        } catch (ParseException | IOException e){
             throw new RuntimeException(e.getMessage());
         }
     }
