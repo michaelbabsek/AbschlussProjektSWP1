@@ -29,6 +29,8 @@ public class Tokenizer {
                 tokens.add(readString(line, column));
             } else if (c == '{') {
                 tokens.add(readEnum(line, column));
+            } else if (c == '#') {
+                tokens.add(readHexColor(line, column));
             } else if (c == '*') {
                 tokens.add(new SymbolToken(TokenType.STAR, line, column));
                 advance();
@@ -61,6 +63,22 @@ public class Tokenizer {
         }
     }
 
+    private NumberToken readHexColor(int startLine, int startColumn) {
+        StringBuilder hex = new StringBuilder();
+        advance(); // # überspringen
+
+        while (pos < script.length() && isHexChar(script.charAt(pos))) {
+            hex.append(script.charAt(pos));
+            advance();
+        }
+
+        if (hex.isEmpty()) {
+            throw new RuntimeException("Invalid hex color at " + startLine + ":" + startColumn);
+        }
+
+        int hexValue = Integer.parseInt(hex.toString(), 16);
+        return new NumberToken(hexValue, "#" + hex, startLine, startColumn);
+    }
     private NumberToken readNumber(int startLine, int startColumn) {
         StringBuilder number = new StringBuilder();
         char c = script.charAt(pos);
@@ -82,7 +100,9 @@ public class Tokenizer {
                 number.append(script.charAt(pos));
                 advance();
             }
-            return new NumberToken(0, number.toString(), startLine, startColumn);
+
+            int hexValue = Integer.decode(number.toString());  // <-- Parst "0x..." korrekt
+            return new NumberToken(hexValue, number.toString(), startLine, startColumn);
         }
 
         // Normale Zahl
@@ -121,17 +141,49 @@ public class Tokenizer {
 
     private StringToken readString(int startLine, int startColumn) {
         StringBuilder str = new StringBuilder();
-        advance(); //skipping '"'
+        advance(); // skipping '"'
+
         while (pos < script.length() && script.charAt(pos) != '"') {
-            str.append(script.charAt(pos));
-            advance();
+            if (script.charAt(pos) == '\\' && pos + 1 < script.length()) {
+                char next = script.charAt(pos + 1);
+                switch (next) {
+                    case '"' -> {
+                        str.append('"');
+                        advance(); // \ überspringen
+                        advance(); // " überspringen
+                    }
+                    case '\\' -> {
+                        str.append('\\');
+                        advance();
+                        advance();
+                    }
+                    case 'n' -> {
+                        str.append('\n');
+                        advance();
+                        advance();
+                    }
+                    case 't' -> {
+                        str.append('\t');
+                        advance();
+                        advance();
+                    }
+                    default -> {
+                        // Unbekannte Escape-Sequenz: Backslash beibehalten
+                        str.append(script.charAt(pos));
+                        advance();
+                    }
+                }
+            } else {
+                str.append(script.charAt(pos));
+                advance();
+            }
         }
 
         if (pos >= script.length()) {
             throw new RuntimeException("Unterminated string at " + startLine + ":" + startColumn);
         }
 
-        advance(); // last character was '"', advancing to avoid reading the rest of the script
+        advance(); // schließendes " überspringen
         return new StringToken(str.toString(), startLine, startColumn);
     }
 

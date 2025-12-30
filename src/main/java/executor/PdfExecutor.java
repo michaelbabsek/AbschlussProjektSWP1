@@ -12,28 +12,20 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class PdfExecutor {
-    // Konfiguration (unveränderlich)
     private final PageConfig config;
-
-    // Dokument-Ressourcen (Lifecycle: execute-Methode)
     private PDDocument document;
     private PDPageContentStream contentStream;
-
-    // Zustand
     private RenderState state;
     private File outputFile;
 
     public PdfExecutor() {
-        this(PageConfig.DEFAULT);
-    }
-
-    public PdfExecutor(PageConfig config) {
-        this.config = config;
+        this.config = PageConfig.DEFAULT;
     }
 
     public void execute(List<Command> commands) throws IOException {
         try {
             document = new PDDocument();
+            FontResolver.setDocument(document);
             state = new RenderState(config);
             outputFile = null;
 
@@ -96,7 +88,10 @@ public class PdfExecutor {
     private List<String> parseLines(String input) throws IOException {
         float maxWidth = config.textWidth();
         List<String> result = new LinkedList<>();
-        String[] lines = input.split(System.lineSeparator());
+
+        String sanitizedInput = FontResolver.sanitize(input, state.font());
+        String[] lines = sanitizedInput.split(System.lineSeparator());
+
 
         for (String line : lines) {
             String[] words = line.split(" ");

@@ -228,13 +228,7 @@ public class Parser {
                         }
                         case "colour", "color" -> {
                             advance();
-                            Token colourToken = getCurrentToken();
-                            if (colourToken instanceof NumberToken n) {
-                                colour = String.valueOf(n.value());
-                            } else if (colourToken instanceof WordToken w) {
-                                colour = w.value();
-                            }
-                            advance();
+                            colour = parseColour();
                         }
                         default -> throw new ParseException("Unexpected word: " + word, pos);
                     }
@@ -248,6 +242,22 @@ public class Parser {
         }
 
         return new FontCommand(size, style, colour, fontName);
+    }
+
+    private String parseColour() throws ParseException {
+        Token token = getCurrentToken();
+        String colour;
+
+        if (token instanceof NumberToken n) {
+            colour = n.rawValue();
+        } else if (token instanceof WordToken w) {
+            colour = w.value();
+        } else {
+            throw new ParseException("Expected colour, got: " + token, pos);
+        }
+
+        advance();
+        return colour;
     }
 
     public Command parseTable() throws ParseException {
@@ -292,7 +302,7 @@ public class Parser {
                             advance();
                             Token colourToken = getCurrentToken();
                             if (colourToken instanceof NumberToken n) {
-                                lineColour = String.valueOf(n.value());
+                                lineColour = n.rawValue();
                             } else if (colourToken instanceof WordToken w) {
                                 lineColour = w.value();
                             }
@@ -302,7 +312,7 @@ public class Parser {
                             advance();
                             Token colourToken = getCurrentToken();
                             if (colourToken instanceof NumberToken n) {
-                                background = String.valueOf(n.value());
+                                background = n.rawValue();
                             } else if (colourToken instanceof WordToken w) {
                                 background = w.value();
                             }
