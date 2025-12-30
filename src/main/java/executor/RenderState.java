@@ -10,6 +10,9 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 public class RenderState {
+    private static final float LEADING_FACTOR = 1.5f;
+    private static final int FONT_SIZE = 12;
+
     private float x;
     private float y;
     private PDFont font;
@@ -23,9 +26,9 @@ public class RenderState {
         this.y = config.startY();
         this.fontStyle = FontStyle.OBLIQUE;
         this.font = FontResolver.resolve("helvetica", fontStyle);
-        this.fontSize = 12;
+        this.fontSize = FONT_SIZE;
         this.color = Color.BLACK;
-        this.leading = fontSize * 1.5f;
+        this.leading = fontSize * LEADING_FACTOR;
     }
 
     // Getters
@@ -62,7 +65,7 @@ public class RenderState {
         }
         if (size > 0) {
             this.fontSize = size;
-            this.leading = size * 1.5f;
+            this.leading = size * LEADING_FACTOR;
         }
         if (colour != null) {
             this.color = parseColor(colour);

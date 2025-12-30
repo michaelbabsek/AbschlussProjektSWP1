@@ -7,7 +7,6 @@ import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
-import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
