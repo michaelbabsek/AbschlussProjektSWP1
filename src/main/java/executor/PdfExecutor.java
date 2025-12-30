@@ -211,6 +211,7 @@ public class PdfExecutor {
             image.setWidth(cmd.size().width());
 
         }else{
+            //hier noch standard größe des bildes
             image.getHeight();
             image.getWidth();
 
