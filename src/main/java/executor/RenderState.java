@@ -2,12 +2,9 @@ package executor;
 
 import commands.FontStyle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
 import java.awt.*;
 import java.lang.reflect.Field;
-import java.util.Map;
 
 public class RenderState {
     private static final float LEADING_FACTOR = 1.5f;
@@ -24,7 +21,7 @@ public class RenderState {
     public RenderState(PageConfig config) {
         this.x = config.startX();
         this.y = config.startY();
-        this.fontStyle = FontStyle.OBLIQUE;
+        this.fontStyle = FontStyle.REGULAR;
         this.font = FontResolver.resolve("helvetica", fontStyle);
         this.fontSize = FONT_SIZE;
         this.color = Color.BLACK;
@@ -49,8 +46,17 @@ public class RenderState {
         this.y -= leading;
     }
 
-    public void resetToTop(PageConfig config) {
+    public void advanceX(float distance) {
+        this.x += distance;
+    }
+
+    public void resetX(PageConfig config) {
+        this.x = config.startX();
+    }
+
+    public void resetPosition(PageConfig config) {
         this.y = config.startY();
+        this.x = config.startX();
     }
 
     public boolean isBelowMargin(PageConfig config) {

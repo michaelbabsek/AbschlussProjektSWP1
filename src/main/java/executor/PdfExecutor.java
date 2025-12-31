@@ -4,7 +4,6 @@ import commands.*;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import java.io.File;
@@ -26,7 +25,6 @@ public class PdfExecutor {
     public void execute(List<Command> commands) throws IOException {
         try {
             document = new PDDocument();
-            FontResolver.setDocument(document);
             state = new RenderState(config);
             outputFile = null;
 
@@ -80,58 +78,77 @@ public class PdfExecutor {
         PDPage page = new PDPage(config.pageSize());
         document.addPage(page);
         contentStream = new PDPageContentStream(document, page);
+
+        state.resetPosition(config);
     }
 
     private void executeFont(FontCommand cmd) {
         state.applyFont(cmd.fontName(), cmd.style(), cmd.colour(), cmd.size());
     }
 
-    private List<String> parseLines(String input) throws IOException {
-        float maxWidth = config.textWidth();
+    private List<String> parseLines(String input, float currentX) throws IOException {
+        float maxX = config.startX() + config.textWidth();
+        float availableWidth = maxX - currentX;
         List<String> result = new LinkedList<>();
 
-        String sanitizedInput = FontResolver.sanitize(input, state.font());
-        String[] lines = sanitizedInput.split(System.lineSeparator());
+        // Erst nach Newlines splitten, DANN sanitizen
+        String[] lines = input.split("\n", -1);
 
-
-        for (String line : lines) {
-            String[] words = line.split(" ");
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            String line = lines[lineIndex];
+            String sanitizedLine = FontResolver.sanitize(line, state.font());
             StringBuilder currentLine = new StringBuilder();
+            float currentAvailable = (lineIndex == 0) ? availableWidth : config.textWidth();
 
-            for (String word : words) {
-                float wordWidth = state.fontSize() * state.font().getStringWidth(word) / 1000.0f;
-
-                if (wordWidth > maxWidth) {
-                    if (!currentLine.isEmpty()) {
-                        result.add(currentLine.toString());
-                    }
-
-                    StringBuilder chunk = new StringBuilder();
-                    for (char c : word.toCharArray()) {
-                        float chunkWidth = state.fontSize() * state.font().getStringWidth(chunk.toString() + c) / 1000.0f;
-                        if (chunkWidth > maxWidth && !chunk.isEmpty()) {
-                            result.add(chunk.toString());
-                            chunk = new StringBuilder();
-                        }
-                        chunk.append(c);
-                    }
-                    currentLine = chunk;
-                    continue;
+            int i = 0;
+            while (i < sanitizedLine.length()) {
+                // Whitespace-Sequenz sammeln
+                StringBuilder whitespace = new StringBuilder();
+                while (i < sanitizedLine.length() && sanitizedLine.charAt(i) == ' ') {
+                    whitespace.append(sanitizedLine.charAt(i));
+                    i++;
                 }
 
-                String testStr = currentLine.isEmpty() ? word : currentLine + " " + word;
+                // Wort sammeln (alle Nicht-Leerzeichen)
+                StringBuilder word = new StringBuilder();
+                while (i < sanitizedLine.length() && sanitizedLine.charAt(i) != ' ') {
+                    word.append(sanitizedLine.charAt(i));
+                    i++;
+                }
+
+                // Whitespace + Wort als Einheit behandeln
+                String segment = whitespace.toString() + word.toString();
+                if (segment.isEmpty()) continue;
+
+                String testStr = currentLine.toString() + segment;
                 float lineWidth = state.fontSize() * state.font().getStringWidth(testStr) / 1000.0f;
 
-                if (lineWidth > maxWidth) {
-                    result.add(currentLine.toString());
-                    currentLine = new StringBuilder(word);
+                if (lineWidth > currentAvailable) {
+                    // Segment passt nicht mehr in aktuelle Zeile
+                    if (!currentLine.isEmpty()) {
+                        result.add(currentLine.toString());
+                        currentLine = new StringBuilder();
+                        currentAvailable = config.textWidth();
+                    }
+
+                    // Führende Leerzeichen am Zeilenanfang weglassen
+                    String segmentTrimmed = segment.replaceFirst("^\\s+", "");
+                    currentLine.append(segmentTrimmed);
                 } else {
-                    currentLine = new StringBuilder(testStr);
+                    currentLine.append(segment);
                 }
             }
 
             if (!currentLine.isEmpty()) {
                 result.add(currentLine.toString());
+            } else if (sanitizedLine.isEmpty()) {
+                // Leere Zeilen erhalten (z.B. bei \n)
+                result.add("");
+            }
+
+            // Nach jeder \n-Zeile außer der letzten einen expliziten Zeilenumbruch markieren
+            if (lineIndex < lines.length - 1) {
+                result.add("\n");
             }
         }
 
@@ -139,38 +156,65 @@ public class PdfExecutor {
     }
 
     private void printText(Position pos, String text) throws IOException {
-        List<String> lines = parseLines(text);
-
         if (pos != null) {
             state.setPosition(pos.x(), pos.y());
         }
 
-        contentStream.beginText();
-        contentStream.setFont(state.font(), state.fontSize());
-        contentStream.setNonStrokingColor(state.color());
-        contentStream.newLineAtOffset(state.x(), state.y());
+        List<String> lines = parseLines(text, state.x());
 
-        for (String line : lines) {
-            state.newLine();
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
 
-            if (state.isBelowMargin(config)) {
-                contentStream.endText();
-                addPage();
-                state.resetToTop(config);
-
-                contentStream.beginText();
-                contentStream.setFont(state.font(), state.fontSize());
-                contentStream.setNonStrokingColor(state.color());
-
+            // Expliziter Zeilenumbruch durch \n
+            if (line.equals("\n")) {
                 state.newLine();
-                contentStream.newLineAtOffset(state.x(), state.y());
-            } else {
-                contentStream.newLineAtOffset(0, -state.leading());
+                state.resetX(config);
+
+                if (state.isBelowMargin(config)) {
+                    addPage();
+                    state.resetPosition(config);
+                }
+                continue;
             }
 
+            // Prüfen ob Umbruch vor diesem Segment nötig ist (nur beim ersten Segment)
+            if (i == 0) {
+                float textWidth = state.fontSize() * state.font().getStringWidth(line) / 1000.0f;
+                float maxX = config.startX() + config.textWidth();
+                if (state.x() + textWidth > maxX) {
+                    state.newLine();
+                    state.resetX(config);
+
+                    if (state.isBelowMargin(config)) {
+                        addPage();
+                        state.resetPosition(config);
+                    }
+                }
+            }
+
+            // Text in aktuelle Zeile schreiben
+            contentStream.beginText();
+            contentStream.setFont(state.font(), state.fontSize());
+            contentStream.setNonStrokingColor(state.color());
+            contentStream.newLineAtOffset(state.x(), state.y());
             contentStream.showText(line);
+            contentStream.endText();
+
+            // X-Position aktualisieren
+            float textWidth = state.fontSize() * state.font().getStringWidth(line) / 1000.0f;
+            state.advanceX(textWidth);
+
+            // Automatischer Zeilenumbruch zwischen Segmenten (parseLines hat sie getrennt, weil sie nicht in eine Zeile passen)
+            if (i < lines.size() - 1 && !lines.get(i + 1).equals("\n")) {
+                state.newLine();
+                state.resetX(config);
+
+                if (state.isBelowMargin(config)) {
+                    addPage();
+                    state.resetPosition(config);
+                }
+            }
         }
-        contentStream.endText();
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
@@ -197,27 +241,65 @@ public class PdfExecutor {
 
     private void executeNextPage() throws IOException {
         addPage();
-        state.resetToTop(config);
+        state.resetPosition(config);
+    }
+
+    private PDImageXObject loadImage(String path) throws IOException {
+        try {
+            return PDImageXObject.createFromFile(path, document);
+        } catch (IOException e) {
+            throw new IOException("No Image found " +  path);
+        }
     }
 
     private void executeImage(ImageCommand cmd) throws IOException {
-        try{
-        PDImageXObject image = PDImageXObject.createFromFile(cmd.filename(), document);
+        PDImageXObject image = loadImage(cmd.filename());
+
+        // Position setzen falls angegeben
         if (cmd.position() != null) {
             state.setPosition(cmd.position().x(), cmd.position().y());
         }
+
+        // Größe bestimmen
+        float width = image.getWidth();
+        float height = image.getHeight();
+
         if (cmd.size() != null) {
-            image.setHeight(cmd.size().height());
-            image.setWidth(cmd.size().width());
-
-        }else{
-            //hier noch standard größe des bildes
-            image.getHeight();
-            image.getWidth();
-
-        }} catch (Exception e) {
-            throw new IOException("No Image found " +  cmd.filename());
+            width = cmd.size().width();
+            height = cmd.size().height();
         }
+
+        // Bild auf textWidth/textHeight skalieren falls zu groß
+        if (width > config.textWidth() || height > config.textHeight()) {
+            double scale = Math.min((double) config.textWidth() / width, (double) config.textHeight() / height);
+            width = (float) (width * scale);
+            height = (float) (height * scale);
+        }
+
+        // Verfügbaren Platz berechnen (vom aktuellen Punkt bis zum rechten/unteren Rand)
+        // NACH der Skalierung!
+        float maxX = config.startX() + config.textWidth();
+        float minY = config.minY();
+        float availableWidth = maxX - state.x();
+        float availableHeight = state.y() - minY;
+
+        // Prüfen ob Bild in verfügbaren Platz passt
+        if (height > availableHeight) {
+            // Bild passt nicht in verfügbare Höhe -> neue Seite
+            addPage();
+        } else if (width > availableWidth) {
+            // Bild passt nicht in verfügbare Breite -> neue Zeile versuchen
+            state.newLine();
+            state.resetX(config);
+
+            // Prüfen ob es nach Zeilenumbruch immer noch nicht passt (Höhe)
+            if (state.y() - height < minY) {
+                addPage();
+            }
+        }
+
+        contentStream.drawImage(image, state.x(), state.y() - height + state.fontSize(), width, height);
+        state.setPosition(state.x() + width, state.y() - height);
     }
 
     private void closeContentStream() throws IOException {
