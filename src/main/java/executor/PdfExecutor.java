@@ -1,10 +1,16 @@
 package executor;
 
 import commands.*;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,8 +21,10 @@ public class PdfExecutor {
     private final PageConfig config;
     private PDDocument document;
     private PDPageContentStream contentStream;
+    private PDPage page;
     private RenderState state;
     private File outputFile;
+
 
     public PdfExecutor() {
         this.config = PageConfig.DEFAULT;
@@ -76,6 +84,7 @@ public class PdfExecutor {
     private void addPage() throws IOException {
         closeContentStream();
         PDPage page = new PDPage(config.pageSize());
+        this.page = page;
         document.addPage(page);
         contentStream = new PDPageContentStream(document, page);
 
@@ -121,7 +130,7 @@ public class PdfExecutor {
                 if (segment.isEmpty()) continue;
 
                 String testStr = currentLine.toString() + segment;
-                float lineWidth = state.fontSize() * state.font().getStringWidth(testStr) / 1000.0f;
+                float lineWidth = getTextWidth(line);
 
                 if (lineWidth > currentAvailable) {
                     // Segment passt nicht mehr in aktuelle Zeile
@@ -179,7 +188,7 @@ public class PdfExecutor {
 
             // Prüfen ob Umbruch vor diesem Segment nötig ist (nur beim ersten Segment)
             if (i == 0) {
-                float textWidth = state.fontSize() * state.font().getStringWidth(line) / 1000.0f;
+                float textWidth = getTextWidth(line);
                 float maxX = config.startX() + config.textWidth();
                 if (state.x() + textWidth > maxX) {
                     state.newLine();
@@ -201,7 +210,7 @@ public class PdfExecutor {
             contentStream.endText();
 
             // X-Position aktualisieren
-            float textWidth = state.fontSize() * state.font().getStringWidth(line) / 1000.0f;
+            float textWidth = getTextWidth(line);
             state.advanceX(textWidth);
 
             // Automatischer Zeilenumbruch zwischen Segmenten (parseLines hat sie getrennt, weil sie nicht in eine Zeile passen)
@@ -215,6 +224,11 @@ public class PdfExecutor {
                 }
             }
         }
+    }
+
+    private float getTextWidth(String text) throws IOException {
+        float textWidth = state.fontSize() * state.font().getStringWidth(text) / 1000.0f;
+        return textWidth;
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
@@ -237,6 +251,63 @@ public class PdfExecutor {
 
     private void executeControl(ControlCommand cmd) throws IOException {
         // TODO
+        if (cmd.position() != null) {
+            state.setPosition(cmd.position().x(), cmd.position().y());
+        }
+        if (cmd.cell() != null) {
+            //richard ist dran kuss
+        }
+        switch (cmd.type()) {
+            case TEXTBOX -> createTextbox(cmd);
+            case DROPDOWN -> createDropdown(cmd);
+            case RADIO -> createRadio(cmd);
+            case OPTION -> createOption(cmd);
+        }
+
+    }
+
+    private void createOption(ControlCommand cmd) throws IOException {
+
+    }
+
+    private void createRadio(ControlCommand cmd) throws IOException {
+
+    }
+
+    private void createDropdown(ControlCommand cmd) throws IOException {
+
+    }
+
+    private void createTextbox(ControlCommand cmd) throws IOException {
+        PDAcroForm acroForm = new PDAcroForm(document);
+        document.getDocumentCatalog().setAcroForm(acroForm);
+        PDTextField textField = new PDTextField(acroForm);
+        textField.setPartialName("");
+
+        PDResources resources = new PDResources();
+        acroForm.setDefaultResources(resources);
+        COSName fontName = COSName.getPDFName("Helv");
+
+        resources.put(fontName, state.font());
+        String defaultAppearance = "/Helv 12 Tf 0 g";
+        acroForm.setDefaultAppearance(defaultAppearance);
+
+
+
+        float width = getTextWidth(cmd.content());
+        float height = state.fontSize();
+        PDAnnotationWidget widget = textField.getWidgets().getFirst();
+        PDRectangle rect = new PDRectangle();
+        rect.setLowerLeftX(state.x());
+        rect.setLowerLeftY(state.y());
+        rect.setUpperRightX(state.x() + width);
+        rect.setUpperRightY(state.y() + height);
+        textField.setValue(cmd.content());
+
+        widget.setRectangle(rect);
+        widget.setPage(page);
+        page.getAnnotations().add(widget);
+        acroForm.getFields().add(textField);
     }
 
     private void executeNextPage() throws IOException {
@@ -248,7 +319,7 @@ public class PdfExecutor {
         try {
             return PDImageXObject.createFromFile(path, document);
         } catch (IOException e) {
-            throw new IOException("No Image found " +  path);
+            throw new IOException("No Image found " + path);
         }
     }
 
