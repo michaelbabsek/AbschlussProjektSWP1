@@ -34,6 +34,9 @@ public final class FontResolver {
     }
 
     private static PDType1Font getHelvetica(FontStyle style) {
+        if (style == null) {
+            return new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        }
         return new PDType1Font(switch (style) {
             case BOLD -> Standard14Fonts.FontName.HELVETICA_BOLD;
             case ITALIC, OBLIQUE -> Standard14Fonts.FontName.HELVETICA_OBLIQUE;
@@ -43,6 +46,9 @@ public final class FontResolver {
     }
 
     private static PDType1Font getTimes(FontStyle style) {
+        if (style == null) {
+            return new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
+        }
         return new PDType1Font(switch (style) {
             case BOLD -> Standard14Fonts.FontName.TIMES_BOLD;
             case ITALIC, OBLIQUE -> Standard14Fonts.FontName.TIMES_ITALIC;
@@ -52,6 +58,9 @@ public final class FontResolver {
     }
 
     private static PDType1Font getCourier(FontStyle style) {
+        if (style == null) {
+            return new PDType1Font(Standard14Fonts.FontName.COURIER);
+        }
         return new PDType1Font(switch (style) {
             case BOLD -> Standard14Fonts.FontName.COURIER_BOLD;
             case ITALIC, OBLIQUE -> Standard14Fonts.FontName.COURIER_OBLIQUE;

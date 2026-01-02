@@ -16,10 +16,12 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 
 public class PdfExecutor {
     private final PageConfig config;
     private PDDocument document;
+    private PDAcroForm acroForm;
     private PDPageContentStream contentStream;
     private PDPage page;
     private RenderState state;
@@ -33,6 +35,17 @@ public class PdfExecutor {
     public void execute(List<Command> commands) throws IOException {
         try {
             document = new PDDocument();
+            acroForm = new PDAcroForm(document);
+            acroForm.setNeedAppearances(true); // PDF-Reader generiert Appearances
+
+            // Default Resources für Form-Felder
+            PDResources resources = new PDResources();
+            resources.put(COSName.getPDFName("Helv"), new org.apache.pdfbox.pdmodel.font.PDType1Font(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA));
+            resources.put(COSName.getPDFName("ZaDb"), new org.apache.pdfbox.pdmodel.font.PDType1Font(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.ZAPF_DINGBATS));
+            acroForm.setDefaultResources(resources);
+            acroForm.setDefaultAppearance("/Helv 12 Tf 0 g");
+
+            document.getDocumentCatalog().setAcroForm(acroForm);
             state = new RenderState(config);
             outputFile = null;
 
@@ -126,10 +139,9 @@ public class PdfExecutor {
                 }
 
                 // Whitespace + Wort als Einheit behandeln
-                String segment = whitespace.toString() + word.toString();
+                String segment = whitespace.toString() + word;
                 if (segment.isEmpty()) continue;
 
-                String testStr = currentLine.toString() + segment;
                 float lineWidth = getTextWidth(line);
 
                 if (lineWidth > currentAvailable) {
@@ -227,8 +239,7 @@ public class PdfExecutor {
     }
 
     private float getTextWidth(String text) throws IOException {
-        float textWidth = state.fontSize() * state.font().getStringWidth(text) / 1000.0f;
-        return textWidth;
+        return state.fontSize() * state.font().getStringWidth(text) / 1000.0f;
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
@@ -267,47 +278,63 @@ public class PdfExecutor {
     }
 
     private void createOption(ControlCommand cmd) throws IOException {
-
+        // TODO
     }
 
     private void createRadio(ControlCommand cmd) throws IOException {
-
+        // TODO
     }
 
     private void createDropdown(ControlCommand cmd) throws IOException {
-
+        // TODO
     }
 
+    private String getDefaultAppearance() {
+        // DefaultAppearance mit aktueller Schriftart, Größe und Farbe
+
+        return String.format(java.util.Locale.US, "/%s %d Tf %.3f %.3f %.3f rg",
+                state.font().getName(),
+                state.fontSize(),
+                state.color().getRed() / 255.0f,
+                state.color().getGreen() / 255.0f,
+                state.color().getBlue() / 255.0f
+        );
+    }
     private void createTextbox(ControlCommand cmd) throws IOException {
-        PDAcroForm acroForm = new PDAcroForm(document);
-        document.getDocumentCatalog().setAcroForm(acroForm);
-        PDTextField textField = new PDTextField(acroForm);
-        textField.setPartialName("");
-
         PDResources resources = new PDResources();
+        resources.put(COSName.getPDFName(state.font().getName()), state.font());
         acroForm.setDefaultResources(resources);
-        COSName fontName = COSName.getPDFName("Helv");
 
-        resources.put(fontName, state.font());
-        String defaultAppearance = "/Helv 12 Tf 0 g";
+        String defaultAppearance = getDefaultAppearance();
         acroForm.setDefaultAppearance(defaultAppearance);
 
+        PDTextField textField = new PDTextField(acroForm);
+        textField.setPartialName(UUID.randomUUID().toString());
+        textField.setValue(cmd.content());
 
+        // DefaultAppearance auch auf das TextField selbst setzen, damit die Farbe übernommen wird
+        textField.setDefaultAppearance(defaultAppearance);
 
-        float width = getTextWidth(cmd.content());
+        // Breite auf maximal textWidth beschränken
+        float width = Math.min(getTextWidth(cmd.content()), config.textWidth());
         float height = state.fontSize();
+
         PDAnnotationWidget widget = textField.getWidgets().getFirst();
         PDRectangle rect = new PDRectangle();
+
         rect.setLowerLeftX(state.x());
-        rect.setLowerLeftY(state.y());
+        rect.setLowerLeftY(state.y()); // Untere Kante unterhalb der aktuellen Position
         rect.setUpperRightX(state.x() + width);
-        rect.setUpperRightY(state.y() + height);
-        textField.setValue(cmd.content());
+        rect.setUpperRightY(state.y() + height); // Obere Kante auf aktueller Position
 
         widget.setRectangle(rect);
         widget.setPage(page);
+
         page.getAnnotations().add(widget);
         acroForm.getFields().add(textField);
+
+        // Position nach rechts verschieben (nach der Textbox)
+        state.setPosition(state.x() + width, state.y());
     }
 
     private void executeNextPage() throws IOException {
