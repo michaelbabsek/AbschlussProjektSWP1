@@ -10,10 +10,12 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDComboBox;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -287,6 +289,46 @@ public class PdfExecutor {
 
     private void createDropdown(ControlCommand cmd) throws IOException {
         // TODO
+        //dropdown startet bis jetzt leer wir können aber auch default Wert mit
+        // comboBox.setValue(options.getFirst());
+        // setzen falls gewünscht
+
+        PDComboBox comboBox = new PDComboBox(acroForm);
+        comboBox.setPartialName(UUID.randomUUID().toString());
+        comboBox.setDefaultAppearance(getDefaultAppearance());
+        //Eingabe der Optionen über "..." und abtrennen mit ;
+        List<String> options = Arrays.stream(cmd.content().split(";"))
+                .map(String::trim)
+                .toList();
+        //options als ComboBox Options setzen
+
+        if (!options.isEmpty()) {
+            comboBox.setOptions(options);
+        }else {
+            throw new IllegalArgumentException("Dropdown without options");
+        }
+
+
+        //Widget setzen
+        float width = Math.min(getTextWidth(cmd.content()) + 5, config.textWidth());
+        float height = state.fontSize();
+        PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
+        PDRectangle rect = new PDRectangle();
+
+        rect.setLowerLeftX(state.x());
+        rect.setLowerLeftY(state.y());
+        rect.setUpperRightX(state.x() + width);
+        rect.setUpperRightY(state.y() + height);
+
+        widget.setRectangle(rect);
+        widget.setPage(page);
+
+        page.getAnnotations().add(widget);
+
+        //in AcroForm
+        acroForm.getFields().add(comboBox);
+        //Position wieder setzen
+        state.setPosition(state.x() + width, state.y());
     }
 
     private String getDefaultAppearance() {
@@ -316,7 +358,7 @@ public class PdfExecutor {
         textField.setDefaultAppearance(defaultAppearance);
 
         // Breite auf maximal textWidth beschränken
-        float width = Math.min(getTextWidth(cmd.content()), config.textWidth());
+        float width = Math.min(getTextWidth(cmd.content()) + 5, config.textWidth());
         float height = state.fontSize();
 
         PDAnnotationWidget widget = textField.getWidgets().getFirst();
@@ -336,6 +378,7 @@ public class PdfExecutor {
         // Position nach rechts verschieben (nach der Textbox)
         state.setPosition(state.x() + width, state.y());
     }
+
 
     private void executeNextPage() throws IOException {
         addPage();
