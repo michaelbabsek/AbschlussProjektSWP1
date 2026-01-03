@@ -10,6 +10,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
 import org.apache.pdfbox.pdmodel.interactive.form.PDComboBox;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 
@@ -281,6 +282,31 @@ public class PdfExecutor {
 
     private void createOption(ControlCommand cmd) throws IOException {
         // TODO
+        //absolut nicht fertig nicht im ansatz, gehe jetzt aber erstmal ins gym weil der bizeps wächst nicht vom Tasten drücken
+
+        //Checkbox erzeugen
+        PDCheckBox checkBox = new PDCheckBox(acroForm);
+        checkBox.setPartialName(UUID.randomUUID().toString());
+
+        checkBox.unCheck(); // default
+
+        //Widget erzeugen
+        float width= 8;
+        float height= 8;
+        PDAnnotationWidget widget = checkBox.getWidgets().getFirst();
+        PDRectangle rect = new PDRectangle();
+
+        rect.setLowerLeftX(state.x());
+        rect.setLowerLeftY(state.y());
+        rect.setUpperRightX(state.x() + width);
+        rect.setUpperRightY(state.y() + height);
+
+        widget.setRectangle(rect);
+        widget.setPage(page);
+
+        page.getAnnotations().add(widget);
+        acroForm.getFields().add(checkBox);
+
     }
 
     private void createRadio(ControlCommand cmd) throws IOException {
