@@ -9,10 +9,8 @@ import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
-import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
-import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
-import org.apache.pdfbox.pdmodel.interactive.form.PDComboBox;
-import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.form.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -271,6 +269,7 @@ public class PdfExecutor {
         if (cmd.cell() != null) {
             //richard ist dran kuss
         }
+
         switch (cmd.type()) {
             case TEXTBOX -> createTextbox(cmd);
             case DROPDOWN -> createDropdown(cmd);
@@ -282,18 +281,19 @@ public class PdfExecutor {
 
     private void createOption(ControlCommand cmd) throws IOException {
         // TODO
-        //absolut nicht fertig nicht im ansatz, gehe jetzt aber erstmal ins gym weil der bizeps wächst nicht vom Tasten drücken
 
         //Checkbox erzeugen
+        acroForm.setNeedAppearances(true);
         PDCheckBox checkBox = new PDCheckBox(acroForm);
         checkBox.setPartialName(UUID.randomUUID().toString());
 
-        checkBox.unCheck(); // default
+
 
         //Widget erzeugen
         float width= 8;
         float height= 8;
         PDAnnotationWidget widget = checkBox.getWidgets().getFirst();
+        widget.setPrinted(true);
         PDRectangle rect = new PDRectangle();
 
         rect.setLowerLeftX(state.x());
@@ -306,12 +306,53 @@ public class PdfExecutor {
 
         page.getAnnotations().add(widget);
         acroForm.getFields().add(checkBox);
+        checkBox.unCheck();
+        //Position wieder setzen
+        state.setPosition(state.x() + width, state.y());
 
     }
 
     private void createRadio(ControlCommand cmd) throws IOException {
         // TODO
+        //RadioButton erzeugen
+        PDRadioButton radio = new PDRadioButton(acroForm);
+        radio.setPartialName(UUID.randomUUID().toString());
+
+        //content aufnehmen
+        List<String> options = Arrays.stream(cmd.content().split(";"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        radio.setExportValues(options);
+        if (options.isEmpty()) {
+            throw new IllegalArgumentException("Radio without options");
+        }
+        float size = 8;
+
+        for (String option : options) {
+
+            PDAnnotationWidget widget = new PDAnnotationWidget();
+            widget.setPrinted(true);
+            widget.setRectangle(new PDRectangle(state.x(), state.y(), size, size));
+
+            widget.setParent(radio);
+            radio.getWidgets().add(widget);
+
+            page.getAnnotations().add(widget);
+
+            state.setPosition(state.x() + size + 3, state.y());
+            printText(cmd.position(), option);
+
+            //Position wieder setzen
+            state.setPosition(config.startX(), state.y() - state.fontSize());
+
+        }
+       // Feld ins AcroForm
+        acroForm.getFields().add(radio);
+
+
     }
+
 
     private void createDropdown(ControlCommand cmd) throws IOException {
         // TODO
