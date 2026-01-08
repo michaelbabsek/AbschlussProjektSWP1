@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.documentinterchange.taggedpdf.PDTableAttributeObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
@@ -287,8 +288,6 @@ public class PdfExecutor {
         PDCheckBox checkBox = new PDCheckBox(acroForm);
         checkBox.setPartialName(UUID.randomUUID().toString());
 
-
-
         //Widget erzeugen
         float width= 8;
         float height= 8;
@@ -309,6 +308,7 @@ public class PdfExecutor {
         checkBox.unCheck();
         //Position wieder setzen
         state.setPosition(state.x() + width, state.y());
+        printText(state.position(), cmd.content());
 
     }
 

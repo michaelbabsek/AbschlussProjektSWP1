@@ -1,6 +1,7 @@
 package executor;
 
 import commands.FontStyle;
+import commands.Position;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 
 import java.awt.*;
@@ -26,6 +27,7 @@ public class RenderState {
     // Getters
     public float x() { return x; }
     public float y() { return y; }
+    public Position position() { return new Position(x, y); }
     public PDFont font() { return font; }
     public int fontSize() { return fontSize; }
     public Color color() { return color; }
