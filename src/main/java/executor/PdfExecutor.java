@@ -281,7 +281,6 @@ public class PdfExecutor {
     }
 
     private void createOption(ControlCommand cmd) throws IOException {
-        // TODO
 
         //Checkbox erzeugen
         acroForm.setNeedAppearances(true);
@@ -313,7 +312,7 @@ public class PdfExecutor {
     }
 
     private void createRadio(ControlCommand cmd) throws IOException {
-        // TODO
+
         //RadioButton erzeugen
         PDRadioButton radio = new PDRadioButton(acroForm);
         radio.setPartialName(UUID.randomUUID().toString());
@@ -336,6 +335,8 @@ public class PdfExecutor {
             widget.setRectangle(new PDRectangle(state.x(), state.y(), size, size));
 
             widget.setParent(radio);
+            COSName onValue = COSName.getPDFName(option);
+            widget.getCOSObject().setItem(COSName.AS, onValue);
             radio.getWidgets().add(widget);
 
             page.getAnnotations().add(widget);
