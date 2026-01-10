@@ -1,18 +1,11 @@
 package executor;
 
 import commands.*;
-import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.PDResources;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.documentinterchange.taggedpdf.PDTableAttributeObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
-import org.apache.pdfbox.pdmodel.interactive.form.*;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import table.Cell;
 import table.Table;
 
@@ -23,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
 
 public class PdfExecutor {
     private final PageConfig config;
@@ -32,30 +24,24 @@ public class PdfExecutor {
     private PDPageContentStream contentStream;
     private PDPage page;
     private RenderState state;
-    private final ComponentFactory componentFactory = new ComponentFactory();
-    ;
+    private ComponentFactory componentFactory;
     private File outputFile;
     private Table currentTable;
 
 
     public PdfExecutor() throws IOException {
         this.config = PageConfig.DEFAULT;
+        state = new RenderState(config);
 
         document = new PDDocument();
         acroForm = new PDAcroForm(document);
-        acroForm.setNeedAppearances(true); // PDF-Reader generiert Appearances
+        acroForm.setNeedAppearances(true);
+        acroForm.setDefaultAppearance(getDefaultAppearance());
 
-        // Default Resources für Form-Felder
-        PDResources resources = new PDResources();
-        resources.put(COSName.getPDFName("Helv"), new org.apache.pdfbox.pdmodel.font.PDType1Font(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA));
-        resources.put(COSName.getPDFName("ZaDb"), new org.apache.pdfbox.pdmodel.font.PDType1Font(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.ZAPF_DINGBATS));
-        acroForm.setDefaultResources(resources);
-        acroForm.setDefaultAppearance("/Helv 12 Tf 0 g");
+        // ComponentFactory erstellen und Resources initialisieren
+        componentFactory = new ComponentFactory(acroForm);
 
         document.getDocumentCatalog().setAcroForm(acroForm);
-        state = new RenderState(config);
-        outputFile = null;
-
         addPage();
     }
 
@@ -74,13 +60,8 @@ public class PdfExecutor {
             }
 
             saveDocument();
-        } finally {
-            closeContentStream();
-            if (document != null) {
-                document.close();
-            }
-            document = null;
-            state = null;
+        } catch (IOException e) {
+            throw new IOException("Error while creating PDF: " + e.getMessage());
         }
     }
 
@@ -128,7 +109,7 @@ public class PdfExecutor {
 
         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             String line = lines[lineIndex];
-            String sanitizedLine = FontResolver.sanitize(line, state.font());
+            String sanitizedLine = FontHandler.sanitize(line, state.font());
             StringBuilder currentLine = new StringBuilder();
             float currentAvailable = (lineIndex == 0) ? availableWidth : config.textWidth();
 
@@ -268,7 +249,7 @@ public class PdfExecutor {
 
     private void printTextToCell(CellRef cellRef, String value) throws IOException {
         Cell cell = currentTable.getCell(cellRef);
-        componentFactory.createTextfield(acroForm, page, cell.position().x(), cell.position().y(), cell.width(), cell.height(), value, state.font(), state.fontSize(), state.color());
+        componentFactory.createTextfield(page, cell.position(), cell.size(), value, state.font(), state.fontSize(), state.color());
     }
 
     private void executeTable(TableCommand cmd) throws IOException {
@@ -279,11 +260,20 @@ public class PdfExecutor {
         System.out.println(heights);
         currentTable = new Table(state.position(), widths, heights, cmd.columns(), cmd.rows());
 
+        Color lineColor = cmd.lineColour() != null? ColorHandler.parseColor(cmd.lineColour()) : state.color();
+        Color backgroundColor = cmd.background() != null? ColorHandler.parseColor(cmd.background()) : null;
+
         for (int col = 0; col < cmd.columns(); col++) {
             for (int row = 0; row < cmd.rows(); row++) {
                 Cell cell = currentTable.getCell(new CellRef(col, row));
-                Rectangle rect = new Rectangle((int) cell.position().x(), (int) cell.position().y(), cell.width(), cell.height());
-                componentFactory.drawRect(contentStream, state.color(), rect, false);
+
+                Rectangle rect = new Rectangle(
+                        (int) cell.position().x(),
+                        (int) cell.position().y(),
+                        cell.size().width(),
+                        cell.size().height()
+                );
+                componentFactory.drawRect(contentStream, rect, lineColor, backgroundColor, cmd.thickness());
             }
         }
     }
@@ -347,206 +337,56 @@ public class PdfExecutor {
     }
 
     private void createOption(ControlCommand cmd) throws IOException {
-
-        //Checkbox erzeugen
-        PDCheckBox checkBox = new PDCheckBox(acroForm);
-        checkBox.setPartialName(UUID.randomUUID().toString());
-
-        //Widget erzeugen
-        float size = 10;
-        PDAnnotationWidget widget = checkBox.getWidgets().getFirst();
-        widget.setPrinted(true);
-        PDRectangle rect = new PDRectangle(state.x(), state.y(), size, size);
-
-        widget.setRectangle(rect);
-        widget.setPage(page);
-
-        // Appearances selbst generieren für Mac-Kompatibilität
-        PDAppearanceDictionary appearanceDict = new PDAppearanceDictionary();
-
-        // Off-State (leere Box)
-        PDAppearanceStream offStream = new PDAppearanceStream(document);
-        offStream.setResources(new PDResources());
-        offStream.setBBox(new PDRectangle(size, size));
-        try (PDPageContentStream offContent = new PDPageContentStream(document, offStream)) {
-            // Rahmen zeichnen
-            offContent.setStrokingColor(0f, 0f, 0f);
-            offContent.setLineWidth(1);
-            offContent.addRect(0.5f, 0.5f, size - 1, size - 1);
-            offContent.stroke();
-        }
-        appearanceDict.setNormalAppearance(offStream);
-
-        // On-State (Box mit Häkchen)
-        PDAppearanceStream onStream = new PDAppearanceStream(document);
-        onStream.setResources(new PDResources());
-        onStream.setBBox(new PDRectangle(size, size));
-        try (PDPageContentStream onContent = new PDPageContentStream(document, onStream)) {
-            // Rahmen zeichnen
-            onContent.setStrokingColor(0f, 0f, 0f);
-            onContent.setLineWidth(1);
-            onContent.addRect(0.5f, 0.5f, size - 1, size - 1);
-            onContent.stroke();
-            // Häkchen zeichnen
-            onContent.setStrokingColor(0f, 0f, 0f);
-            onContent.setLineWidth(1.5f);
-            onContent.moveTo(2, size / 2);
-            onContent.lineTo(size / 2.5f, 2);
-            onContent.lineTo(size - 2, size - 2);
-            onContent.stroke();
-        }
-
-        // Normal appearance mit beiden States
-        appearanceDict.getCOSObject().setItem(COSName.N,
-                createAppearanceSubDict(offStream, onStream));
-
-        widget.setAppearance(appearanceDict);
-        widget.getCOSObject().setItem(COSName.AS, COSName.OFF);
-
-        page.getAnnotations().add(widget);
-        acroForm.getFields().add(checkBox);
-
-        //Position wieder setzen
+        float size = componentFactory.createCheckbox(document, page, state.x(), state.y());
         state.setPosition(state.x() + size + 2, state.y());
         printText(state.position(), cmd.content());
     }
 
-    private org.apache.pdfbox.cos.COSDictionary createAppearanceSubDict(
-            PDAppearanceStream offStream, PDAppearanceStream onStream) {
-        org.apache.pdfbox.cos.COSDictionary dict = new org.apache.pdfbox.cos.COSDictionary();
-        dict.setItem(COSName.OFF, offStream);
-        dict.setItem(COSName.getPDFName("Yes"), onStream);
-        return dict;
-    }
-
     private void createRadio(ControlCommand cmd) throws IOException {
-
-        //RadioButton erzeugen
-        PDRadioButton radio = new PDRadioButton(acroForm);
-        radio.setPartialName(UUID.randomUUID().toString());
-
-        //content aufnehmen
         List<String> options = Arrays.stream(cmd.content().split(";"))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
-        radio.setExportValues(options);
+
         if (options.isEmpty()) {
             throw new IllegalArgumentException("Radio without options");
         }
-        float size = 10;
 
-        for (String option : options) {
+        componentFactory.createRadio(document, page, state.x(), state.y(), options,
+                new ComponentFactory.RadioCallback() {
+                    @Override
+                    public void onRadioOption(float x, float y, String text) throws IOException {
+                        state.setPosition(x, y);
+                        printText(null, text);
+                        // Position für nächste Option setzen
+                        state.setPosition(config.startX(), state.y() - state.fontSize());
+                    }
 
-            PDAnnotationWidget widget = new PDAnnotationWidget();
-            widget.setPrinted(true);
-            widget.setRectangle(new PDRectangle(state.x(), state.y(), size, size));
+                    @Override
+                    public float getNextY() {
+                        return state.y();
+                    }
 
-            widget.setParent(radio);
-            String onValue = option;
-            widget.getCOSObject().setItem(COSName.AS, COSName.OFF);
-
-            // Appearances für Radio-Button generieren
-            PDAppearanceDictionary appearanceDict = new PDAppearanceDictionary();
-
-            // Off-State (leerer Kreis)
-            PDAppearanceStream offStream = new PDAppearanceStream(document);
-            offStream.setResources(new PDResources());
-            offStream.setBBox(new PDRectangle(size, size));
-            try (PDPageContentStream offContent = new PDPageContentStream(document, offStream)) {
-                drawCircle(offContent, size / 2, size / 2, (size - 2) / 2);
-                offContent.stroke();
-            }
-
-            // On-State (Kreis mit Punkt)
-            PDAppearanceStream onStream = new PDAppearanceStream(document);
-            onStream.setResources(new PDResources());
-            onStream.setBBox(new PDRectangle(size, size));
-            try (PDPageContentStream onContent = new PDPageContentStream(document, onStream)) {
-                // Äußerer Kreis
-                drawCircle(onContent, size / 2, size / 2, (size - 2) / 2);
-                onContent.stroke();
-                // Innerer gefüllter Punkt
-                onContent.setNonStrokingColor(0f, 0f, 0f);
-                drawCircle(onContent, size / 2, size / 2, size / 4);
-                onContent.fill();
-            }
-
-            // Normal appearance Dictionary mit Off und On States
-            org.apache.pdfbox.cos.COSDictionary nDict = new org.apache.pdfbox.cos.COSDictionary();
-            nDict.setItem(COSName.OFF, offStream);
-            nDict.setItem(COSName.getPDFName(onValue), onStream);
-            appearanceDict.getCOSObject().setItem(COSName.N, nDict);
-
-            widget.setAppearance(appearanceDict);
-
-            radio.getWidgets().add(widget);
-            page.getAnnotations().add(widget);
-
-            state.setPosition(state.x() + size + 3, state.y());
-            printText(null, option);
-
-            //Position wieder setzen
-            state.setPosition(config.startX(), state.y() - state.fontSize());
-
-        }
-        // Feld ins AcroForm
-        acroForm.getFields().add(radio);
+                    @Override
+                    public float getNextX() {
+                        return config.startX();
+                    }
+                });
     }
-
-    // Hilfsmethode um einen Kreis zu zeichnen (Bezier-Approximation)
-    private void drawCircle(PDPageContentStream cs, float cx, float cy, float r) throws IOException {
-        float k = 0.5523f; // Bezier-Konstante für Kreisapproximation
-        cs.moveTo(cx + r, cy);
-        cs.curveTo(cx + r, cy + r * k, cx + r * k, cy + r, cx, cy + r);
-        cs.curveTo(cx - r * k, cy + r, cx - r, cy + r * k, cx - r, cy);
-        cs.curveTo(cx - r, cy - r * k, cx - r * k, cy - r, cx, cy - r);
-        cs.curveTo(cx + r * k, cy - r, cx + r, cy - r * k, cx + r, cy);
-        cs.closePath();
-    }
-
 
     private void createDropdown(ControlCommand cmd) throws IOException {
-        // TODO
-        //dropdown startet bis jetzt leer wir können aber auch default Wert mit
-        // comboBox.setValue(options.getFirst());
-        // setzen falls gewünscht
-
-        PDComboBox comboBox = new PDComboBox(acroForm);
-        comboBox.setPartialName(UUID.randomUUID().toString());
-        comboBox.setDefaultAppearance(getDefaultAppearance());
-        //Eingabe der Optionen über "..." und abtrennen mit ;
         List<String> options = Arrays.stream(cmd.content().split(";"))
                 .map(String::trim)
                 .toList();
-        //options als ComboBox Options setzen
 
-        if (!options.isEmpty()) {
-            comboBox.setOptions(options);
-        } else {
+        if (options.isEmpty()) {
             throw new IllegalArgumentException("Dropdown without options");
         }
 
-
-        //Widget setzen
         float width = Math.min(getTextWidth(cmd.content()) + 5, config.textWidth());
         float height = state.fontSize();
-        PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
-        PDRectangle rect = new PDRectangle();
 
-        rect.setLowerLeftX(state.x());
-        rect.setLowerLeftY(state.y());
-        rect.setUpperRightX(state.x() + width);
-        rect.setUpperRightY(state.y() + height);
-
-        widget.setRectangle(rect);
-        widget.setPage(page);
-
-        page.getAnnotations().add(widget);
-
-        //in AcroForm
-        acroForm.getFields().add(comboBox);
-        //Position wieder setzen
+        componentFactory.createDropdown(page, state.x(), state.y(), width, height, options, getDefaultAppearance());
         state.setPosition(state.x() + width, state.y());
     }
 
@@ -563,40 +403,20 @@ public class PdfExecutor {
     }
 
     private void createTextbox(ControlCommand cmd) throws IOException {
-        PDResources resources = new PDResources();
-        resources.put(COSName.getPDFName(state.font().getName()), state.font());
-        acroForm.setDefaultResources(resources);
+        Size size = new Size(
+                (int) Math.min(getTextWidth(cmd.content()), config.textWidth()),
+                state.fontSize()
+        );
 
-        String defaultAppearance = getDefaultAppearance();
-        acroForm.setDefaultAppearance(defaultAppearance);
-
-        PDTextField textField = new PDTextField(acroForm);
-        textField.setPartialName(UUID.randomUUID().toString());
-        textField.setValue(cmd.content());
-
-        // DefaultAppearance auch auf das TextField selbst setzen, damit die Farbe übernommen wird
-        textField.setDefaultAppearance(defaultAppearance);
-
-        // Breite auf maximal textWidth beschränken
-        float width = Math.min(getTextWidth(cmd.content()) + 5, config.textWidth());
-        float height = state.fontSize();
-
-        PDAnnotationWidget widget = textField.getWidgets().getFirst();
-        PDRectangle rect = new PDRectangle();
-
-        rect.setLowerLeftX(state.x());
-        rect.setLowerLeftY(state.y()); // Untere Kante unterhalb der aktuellen Position
-        rect.setUpperRightX(state.x() + width);
-        rect.setUpperRightY(state.y() + height); // Obere Kante auf aktueller Position
-
-        widget.setRectangle(rect);
-        widget.setPage(page);
-
-        page.getAnnotations().add(widget);
-        acroForm.getFields().add(textField);
-
-        // Position nach rechts verschieben (nach der Textbox)
-        state.setPosition(state.x() + width, state.y());
+        Position position = cmd.position() != null? cmd.position() : state.position();
+        componentFactory.createTextfield(
+                page,
+                position,
+                size,
+                cmd.content(),
+                state.font(),
+                state.fontSize(),
+                state.color());
     }
 
 

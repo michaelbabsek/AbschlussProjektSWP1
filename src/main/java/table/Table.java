@@ -40,7 +40,7 @@ public class Table {
             for (int j = 0; j < rows; j++) {
                 int cellHeight = rowHeights.get(j);
                 currentY -= cellHeight;  // Y nach unten verschieben (PDF: Y geht nach oben)
-                cells[i][j] = new Cell(new Position(startX, currentY), cellWidth, cellHeight);
+                cells[i][j] = new Cell(new Position(startX, currentY), new Size(cellWidth, cellHeight));
             }
             startX += cellWidth;  // Nächste Spalte nach rechts
         }

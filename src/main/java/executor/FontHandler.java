@@ -9,11 +9,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class FontResolver {
+public final class FontHandler {
 
     private static final String REPLACEMENT = "[?]";
 
-    private FontResolver() {}
+    private FontHandler() {}
 
     /**
      * Löst Font-Name zu einem PDFont auf.

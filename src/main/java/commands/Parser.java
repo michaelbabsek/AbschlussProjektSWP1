@@ -237,10 +237,6 @@ public class Parser {
             }
         }
 
-        if (size == null) {
-            throw new ParseException("font requires size", pos);
-        }
-
         return new FontCommand(size, style, colour, fontName);
     }
 

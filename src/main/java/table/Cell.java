@@ -1,5 +1,6 @@
 package table;
 
 import commands.Position;
+import commands.Size;
 
-public record Cell(Position position, int width, int height) {}
+public record Cell(Position position, Size size) {}
