@@ -104,8 +104,9 @@ public class PdfExecutor {
         float availableWidth = maxX - currentX;
         List<String> result = new LinkedList<>();
 
-        // Erst nach Newlines splitten, DANN sanitizen
-        String[] lines = input.split("\n", -1);
+        // Echte Newlines durch Leerzeichen ersetzen, nur escaped \n als Zeilenumbruch behandeln
+        String processed = input.replace("\n", " ").replace("\\n", "\n");
+        String[] lines = processed.split("\n", -1);
 
         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             String line = lines[lineIndex];
@@ -134,7 +135,7 @@ public class PdfExecutor {
                 if (segment.isEmpty()) continue;
 
                 // Prüfen ob currentLine + segment noch passt
-                float newLineWidth = getTextWidth(currentLine.toString() + segment);
+                float newLineWidth = getTextWidth(currentLine + segment);
 
                 if (newLineWidth > currentAvailable) {
                     // Segment passt nicht mehr in aktuelle Zeile
