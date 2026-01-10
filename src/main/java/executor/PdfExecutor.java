@@ -133,9 +133,10 @@ public class PdfExecutor {
                 String segment = whitespace.toString() + word;
                 if (segment.isEmpty()) continue;
 
-                float lineWidth = getTextWidth(line);
+                // Prüfen ob currentLine + segment noch passt
+                float newLineWidth = getTextWidth(currentLine.toString() + segment);
 
-                if (lineWidth > currentAvailable) {
+                if (newLineWidth > currentAvailable) {
                     // Segment passt nicht mehr in aktuelle Zeile
                     if (!currentLine.isEmpty()) {
                         result.add(currentLine.toString());
