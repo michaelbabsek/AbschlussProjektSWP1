@@ -17,6 +17,9 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import static tokens.SymbolType.BULLET;
+import static tokens.SymbolType.DASH;
+
 public class PdfExecutor {
     private final PageConfig config;
     private PDDocument document;
@@ -56,6 +59,7 @@ public class PdfExecutor {
                     case ControlCommand c -> executeControl(c);
                     case NextPageCommand c -> executeNextPage();
                     case ImageCommand c -> executeImage(c);
+                    case SymbolCommand c -> executeSymbol(c);
                 }
             }
 
@@ -63,6 +67,29 @@ public class PdfExecutor {
         } catch (IOException e) {
             throw new IOException("Error while creating PDF: " + e.getMessage());
         }
+    }
+
+    private void executeSymbol(SymbolCommand cmd) throws IOException {
+        if (cmd.position() != null){
+            state.setPosition(cmd.position().x(), cmd.position().y());
+        }
+        String symbol= switch (cmd.symbol()){
+            case BULLET -> "•";
+            case DASH -> "-";
+            default -> throw  new IllegalArgumentException("Unknown symbol: " +  cmd.symbol());
+        };
+
+        contentStream.beginText();
+        contentStream.newLineAtOffset(state.x(),  state.y());
+        contentStream.showText(symbol);
+        contentStream.endText();
+        if (cmd.text() != null){
+            float offset = state.fontSize() * 1.2f; //Abstand nach Symbol
+            state.setPosition(state.x() + offset, state.y());
+            printText(state.position(), cmd.text());
+        }
+
+
     }
 
     private void executeOutput(OutputCommand cmd) {

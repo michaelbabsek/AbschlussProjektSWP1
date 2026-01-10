@@ -1,5 +1,3 @@
 package commands;
 
-public sealed interface Command permits
-        OutputCommand, FontCommand, PrintCommand, TableCommand,
-        ControlCommand, NextPageCommand, ImageCommand {}
+public sealed interface Command permits ControlCommand, FontCommand, ImageCommand, NextPageCommand, OutputCommand, PrintCommand, SymbolCommand, TableCommand {}

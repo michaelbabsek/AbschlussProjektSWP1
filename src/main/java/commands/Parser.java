@@ -10,7 +10,7 @@ import java.util.Set;
 public class Parser {
     List<Token> tokens;
     int pos = 0;
-    Set<String> COMMANDS = Set.of("output", "font", "print", "table", "control", "nextpage", "image");
+    Set<String> COMMANDS = Set.of("output", "font", "print", "table", "control", "nextpage", "image", "symbol");
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -33,6 +33,7 @@ public class Parser {
                 case "control" -> parseControl();
                 case "nextpage" -> parseNextPage();
                 case "image" -> parseImage();
+                case "symbol" -> parseSymbol();
                 default -> throw new ParseException("Unknown command: " + w.value(), pos);
             };
 
@@ -452,4 +453,37 @@ public class Parser {
 
         return new ImageCommand(position, cellRef, size, fileName);
     }
+    private Command parseSymbol() throws ParseException {
+        advance();
+
+        Position position = null;
+        SymbolType symbol = null;
+        String text= null;
+
+        while (!isAtEnd()) {
+            Token token = getCurrentToken();
+            if (isCommand(token)) break;
+            switch (token.type()) {
+                case TokenType.AT -> {
+                    advance();
+                    position = parsePosition();
+                }
+                case TokenType.ENUM -> {
+                    String enumValue = ((EnumToken) token).value().toUpperCase();
+                    symbol = SymbolType.valueOf(enumValue);
+                    advance();
+                }
+                case TokenType.STRING -> {
+                    text = ((StringToken) token).value();
+                    advance();
+                }
+                default -> throw new ParseException("Unexpected token in symbol: " + token, pos);
+            }
+        }
+        if (symbol == null){
+            throw new ParseException("symbol requires type", pos);
+        }
+        return new SymbolCommand(position, symbol, text);
+    }
+
 }
