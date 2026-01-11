@@ -70,6 +70,13 @@ public final class FontHandler {
     }
 
     /**
+     * Gibt den ZapfDingbats Font zurück (für Symbole wie Häkchen, Kreise)
+     */
+    public static PDType1Font getZapfDingbats() {
+        return new PDType1Font(Standard14Fonts.FontName.ZAPF_DINGBATS);
+    }
+
+    /**
      * Ersetzt nicht darstellbare Zeichen mit [?]
      */
     public static String sanitize(String text, PDFont font) {

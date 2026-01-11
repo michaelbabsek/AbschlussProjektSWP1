@@ -12,6 +12,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceEntry;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
@@ -25,6 +26,10 @@ import java.util.List;
 import java.util.UUID;
 
 public class ComponentFactory {
+    private static final int DEFAULT_RADIO_SIZE = 10;
+    private static final int DEFAULT_CHECKBOX_SIZE = 10;
+    private static final float CELL_PADDING = 2f;
+    private static final float LABEL_PADDING = 3f;
     private final PDAcroForm acroForm;
     private final PDResources resources;
 
@@ -64,21 +69,26 @@ public class ComponentFactory {
         );
     }
 
-    void createTextfield(PDPage page, Position position, Size size, String content, PDFont font, int fontSize, Color color) throws IOException {
+    void createTextfield(
+            PDPage page,
+            Position position,
+            Size size,
+            String content,
+            PDFont font,
+            int fontSize,
+            Color color,
+            boolean readOnly
+    ) throws IOException {
         // Font zu den gemeinsamen Resources hinzufügen
         resources.put(COSName.getPDFName(font.getName()), font);
-
         PDTextField textField = new PDTextField(acroForm);
         textField.setPartialName(UUID.randomUUID().toString());
         textField.setValue(content);
+        textField.setReadOnly(readOnly);
         textField.setDefaultAppearance(getDefaultAppearance(font.getName(), fontSize, color));
 
         PDAnnotationWidget widget = textField.getWidgets().getFirst();
-        PDRectangle rect = new PDRectangle();
-        rect.setLowerLeftX(position.x());
-        rect.setLowerLeftY(position.y());
-        rect.setUpperRightX(position.x() + size.width());
-        rect.setUpperRightY(position.y() + size.height());
+        PDRectangle rect = new PDRectangle(position.x(), position.y(), size.width(), size.height());
 
         widget.setRectangle(rect);
         widget.setPage(page);
@@ -88,177 +98,228 @@ public class ComponentFactory {
     }
 
     /**
-     * Erstellt eine Checkbox an der angegebenen Position.
-     * @param maxSize maximale Größe (für Zellen), null für Default
-     * @return die Größe der Checkbox (für Positionsupdate)
+     * Erstellt eine Dropdown-Box an der angegebenen Position.
      */
-    float createCheckbox(PDDocument document, PDPage page, Position position, Size maxSize) throws IOException {
-        float size = maxSize != null
-                ? Math.min(maxSize.width(), maxSize.height())
-                : 10;
+    public void createDropdown(
+            PDPage page,
+            Position position,
+            Size size,
+            List<String> options,
+            String defaultAppearance
+    ) throws IOException {
+
+        PDComboBox comboBox = new PDComboBox(acroForm);
+        comboBox.setPartialName(UUID.randomUUID().toString());
+        comboBox.setDefaultAppearance(defaultAppearance);
+        comboBox.setDefaultValue(options.getFirst());
+        comboBox.setOptions(options);
+
+        float boxX = position.x() + CELL_PADDING;
+        float boxY = position.y() + CELL_PADDING;
+        float width = size.width() - CELL_PADDING * 2;
+        float height = size.height() - CELL_PADDING * 2;
+
+        PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
+        widget.setRectangle(new PDRectangle(boxX, boxY, width, height));
+        widget.setPage(page);
+        page.getAnnotations().add(widget);
+
+        acroForm.getFields().add(comboBox);
+    }
+
+    // Hilfsfunktion für Control-Größe (Checkbox/Radio)
+    private float calculateControlSize(int fontSize, int defaultSize, Size maxSize) {
+        float size = Math.min(fontSize, defaultSize);
+        if (maxSize != null) {
+            size = Math.min(size, maxSize.height());
+        }
+        return size;
+    }
+
+    // Hilfsfunktion für Textfeld-Breite neben Controls
+    private float calculateLabelWidth(float controlSize, float padding, Size maxSize) {
+        return maxSize != null ? maxSize.width() - controlSize - padding : 100;
+    }
+
+    void createCheckbox(
+            PDDocument document,
+            PDPage page,
+            Position position,
+            Size maxSize,
+            String label,
+            PDFont font,
+            int fontSize,
+            Color color
+    ) throws IOException {
+
+        float size = calculateControlSize(fontSize, DEFAULT_CHECKBOX_SIZE, maxSize);
+
+        // Position: links oben mit Padding
+        float boxX = position.x() + CELL_PADDING;
+        float boxY = maxSize != null
+                ? position.y() + maxSize.height() - size - CELL_PADDING
+                : position.y();
 
         PDCheckBox checkBox = new PDCheckBox(acroForm);
         checkBox.setPartialName(UUID.randomUUID().toString());
 
         PDAnnotationWidget widget = checkBox.getWidgets().getFirst();
         widget.setPrinted(true);
-        widget.setRectangle(new PDRectangle(position.x(), position.y(), size, size));
+        widget.setRectangle(new PDRectangle(boxX, boxY, size, size));
         widget.setPage(page);
 
-        // Appearances selbst generieren für Mac-Kompatibilität
-        PDAppearanceDictionary appearanceDict = new PDAppearanceDictionary();
-
-        // Off-State (leere Box)
-        PDAppearanceStream offStream = new PDAppearanceStream(document);
-        offStream.setResources(new PDResources());
-        offStream.setBBox(new PDRectangle(size, size));
-        try (PDPageContentStream offContent = new PDPageContentStream(document, offStream)) {
-            offContent.setStrokingColor(0f, 0f, 0f);
-            offContent.setLineWidth(1);
-            offContent.addRect(0.5f, 0.5f, size - 1, size - 1);
-            offContent.stroke();
-        }
-        appearanceDict.setNormalAppearance(offStream);
-
-        // On-State (Box mit Häkchen)
-        PDAppearanceStream onStream = new PDAppearanceStream(document);
-        onStream.setResources(new PDResources());
-        onStream.setBBox(new PDRectangle(size, size));
-        try (PDPageContentStream onContent = new PDPageContentStream(document, onStream)) {
-            onContent.setStrokingColor(0f, 0f, 0f);
-            onContent.setLineWidth(1);
-            onContent.addRect(0.5f, 0.5f, size - 1, size - 1);
-            onContent.stroke();
-            // Häkchen zeichnen
-            onContent.setStrokingColor(0f, 0f, 0f);
-            onContent.setLineWidth(1.5f);
-            onContent.moveTo(2, size / 2);
-            onContent.lineTo(size / 2.5f, 2);
-            onContent.lineTo(size - 2, size - 2);
-            onContent.stroke();
-        }
-
-        // Normal appearance mit beiden States
-        appearanceDict.getCOSObject().setItem(COSName.N, createAppearanceSubDict(offStream, onStream));
-
-        widget.setAppearance(appearanceDict);
+        PDAppearanceStream onState = createCheckboxOnAppearance(document, widget.getRectangle());
+        PDAppearanceStream offState = createCheckboxOffAppearance(document, widget.getRectangle());
+        widget.setAppearance(createAppearanceSubDict(offState, onState, label));
         widget.getCOSObject().setItem(COSName.AS, COSName.OFF);
 
         page.getAnnotations().add(widget);
         acroForm.getFields().add(checkBox);
 
-        return size;
+        // Label rechts neben Checkbox
+        float textX = boxX + size + LABEL_PADDING;
+        float textWidth = calculateLabelWidth(size, LABEL_PADDING + CELL_PADDING * 2, maxSize);
+        createTextfield(page, new Position(textX, boxY), new Size((int) textWidth, (int) size), label, font, fontSize, color, true);
     }
 
-    /**
-     * Erstellt Radio-Buttons.
-     * @param maxSize maximale Größe (für Zellen), null für Default. Höhe wird durch Anzahl Optionen geteilt.
-     */
-    public void createRadio(PDDocument document, PDPage page, Position position, List<String> options, Size maxSize) throws IOException {
-        float size = maxSize != null
-                ? Math.min(maxSize.width(), (float) maxSize.height() / options.size())
-                : 10;
+    public void createRadio(
+            PDDocument document,
+            PDPage page,
+            Position position,
+            List<String> options,
+            Size maxSize,
+            PDFont font,
+            int fontSize,
+            Color color
+    ) throws IOException {
+
+        float sizePerOption = maxSize != null ? maxSize.height() / options.size() : fontSize;
+        float size = calculateControlSize(fontSize, DEFAULT_RADIO_SIZE, new Size(0, (int) sizePerOption));
 
         PDRadioButton radio = new PDRadioButton(acroForm);
         radio.setPartialName(UUID.randomUUID().toString());
         radio.setExportValues(options);
 
-        // Von oben nach unten zeichnen (Y wird kleiner)
-        float currentX = position.x();
-        float currentY = position.y() - size;  // Erste Position: oben minus eine Größe
+        // Start: links oben mit Padding
+        float startX = position.x() + CELL_PADDING;
+        float currentY = maxSize != null
+                ? position.y() + maxSize.height() - size - CELL_PADDING
+                : position.y();
+        float textWidth = calculateLabelWidth(size, LABEL_PADDING + CELL_PADDING * 2, maxSize);
 
         for (String option : options) {
             PDAnnotationWidget widget = new PDAnnotationWidget();
             widget.setPrinted(true);
-            widget.setRectangle(new PDRectangle(currentX, currentY, size, size));
+            widget.setRectangle(new PDRectangle(startX, currentY, size, size));
             widget.setParent(radio);
             widget.getCOSObject().setItem(COSName.AS, COSName.OFF);
 
-            // Appearances für Radio-Button generieren
-            PDAppearanceDictionary appearanceDict = new PDAppearanceDictionary();
-
-            // Off-State (leerer Kreis)
-            PDAppearanceStream offStream = new PDAppearanceStream(document);
-            offStream.setResources(new PDResources());
-            offStream.setBBox(new PDRectangle(size, size));
-            try (PDPageContentStream offContent = new PDPageContentStream(document, offStream)) {
-                drawCircle(offContent, size / 2, size / 2, (size - 2) / 2);
-                offContent.stroke();
-            }
-
-            // On-State (Kreis mit Punkt)
-            PDAppearanceStream onStream = new PDAppearanceStream(document);
-            onStream.setResources(new PDResources());
-            onStream.setBBox(new PDRectangle(size, size));
-            try (PDPageContentStream onContent = new PDPageContentStream(document, onStream)) {
-                drawCircle(onContent, size / 2, size / 2, (size - 2) / 2);
-                onContent.stroke();
-                onContent.setNonStrokingColor(0f, 0f, 0f);
-                drawCircle(onContent, size / 2, size / 2, size / 4);
-                onContent.fill();
-            }
-
-            // Normal appearance Dictionary mit Off und On States
-            COSDictionary nDict = new COSDictionary();
-            nDict.setItem(COSName.OFF, offStream);
-            nDict.setItem(COSName.getPDFName(option), onStream);
-            appearanceDict.getCOSObject().setItem(COSName.N, nDict);
-
-            widget.setAppearance(appearanceDict);
+            PDAppearanceStream onState = createRadioOnAppearance(document, widget.getRectangle());
+            PDAppearanceStream offState = createRadioOffAppearance(document, widget.getRectangle());
+            widget.setAppearance(createAppearanceSubDict(offState, onState, option));
             widget.setPage(page);
 
             radio.getWidgets().add(widget);
             page.getAnnotations().add(widget);
 
-            // Nächste Position (nach unten)
+            // Label rechts neben Radio
+            float textX = startX + size + LABEL_PADDING;
+            createTextfield(page, new Position(textX, currentY), new Size((int) textWidth, (int) size), option, font, fontSize, color, true);
+
             currentY -= size;
         }
 
         acroForm.getFields().add(radio);
     }
+    private PDAppearanceStream createCheckboxOffAppearance(PDDocument document, PDRectangle rectangle) throws IOException {
+        PDAppearanceStream offStream = new PDAppearanceStream(document);
 
-    /**
-     * Erstellt eine Dropdown-Box an der angegebenen Position.
-     */
-    public void createDropdown(PDPage page, Position position, Size size,
-                               List<String> options, String defaultAppearance) throws IOException {
-        PDComboBox comboBox = new PDComboBox(acroForm);
-        comboBox.setPartialName(UUID.randomUUID().toString());
-        comboBox.setDefaultAppearance(defaultAppearance);
-        comboBox.setOptions(options);
+        offStream.setResources(new PDResources());
+        offStream.setBBox(new PDRectangle(rectangle.getWidth(), rectangle.getHeight()));
 
-        PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
-        PDRectangle rect = new PDRectangle();
-        rect.setLowerLeftX(position.x());
-        rect.setLowerLeftY(position.y());
-        rect.setUpperRightX(position.x() + size.width());
-        rect.setUpperRightY(position.y() + size.height());
+        try (PDPageContentStream content = new PDPageContentStream(document, offStream)) {
+            content.setStrokingColor(0f, 0f, 0f);
+            content.setLineWidth(1);
+            content.addRect(0, 0, rectangle.getWidth(), rectangle.getHeight());
+            content.stroke();
+        }
 
-        widget.setRectangle(rect);
-        widget.setPage(page);
-
-        page.getAnnotations().add(widget);
-        acroForm.getFields().add(comboBox);
-
+        return offStream;
     }
 
-    // Hilfsmethode für Checkbox Appearance Dictionary
-    private COSDictionary createAppearanceSubDict(PDAppearanceStream offStream, PDAppearanceStream onStream) {
-        COSDictionary dict = new COSDictionary();
-        dict.setItem(COSName.OFF, offStream);
-        dict.setItem(COSName.getPDFName("Yes"), onStream);
+    private PDAppearanceStream createCheckboxOnAppearance(PDDocument document, PDRectangle rectangle) throws IOException {
+        PDAppearanceStream onStream = new PDAppearanceStream(document);
+
+        onStream.setResources(new PDResources());
+        onStream.setBBox(new PDRectangle(rectangle.getWidth(), rectangle.getHeight()));
+
+        try (PDPageContentStream content = new PDPageContentStream(document, onStream)) {
+            content.setStrokingColor(0f, 0f, 0f);
+            content.setLineWidth(1);
+            content.addRect(0, 0, rectangle.getWidth(), rectangle.getHeight());
+            content.moveTo(0, 0);
+            content.lineTo(rectangle.getWidth(), rectangle.getHeight());
+            content.moveTo(0, rectangle.getHeight());
+            content.lineTo(rectangle.getWidth(), 0);
+            content.stroke();
+        }
+
+        return onStream;
+    }
+
+    private PDAppearanceDictionary createAppearanceSubDict(PDAppearanceStream offStream, PDAppearanceStream onStream, String name) {
+        PDAppearanceDictionary dict = new PDAppearanceDictionary();
+
+        // Direkt ein COSDictionary für die Normal-Appearances bauen
+        COSDictionary normalDict = new COSDictionary();
+        normalDict.setItem(COSName.Off, offStream);
+        normalDict.setItem(COSName.getPDFName(name), onStream);
+
+        // Als Normal-Appearance setzen
+        dict.getCOSObject().setItem(COSName.N, normalDict);
+
         return dict;
     }
 
-    // Hilfsmethode um einen Kreis zu zeichnen (Bezier-Approximation)
+    private PDAppearanceStream createRadioOnAppearance(PDDocument document, PDRectangle rect) throws IOException {
+        PDAppearanceStream stream = new PDAppearanceStream(document);
+        stream.setBBox(new PDRectangle(rect.getWidth(), rect.getHeight()));
+
+        try (PDPageContentStream cs = new PDPageContentStream(document, stream)) {
+            // Kreis zeichnen (Rahmen)
+            float r = Math.min(rect.getWidth(), rect.getHeight()) / 2 - 1;
+            drawCircle(cs, rect.getWidth()/2, rect.getHeight()/2, r);
+            cs.stroke();
+
+            // Gefüllter innerer Kreis für "selected"
+            drawCircle(cs, rect.getWidth()/2, rect.getHeight()/2, r * 0.5f);
+            cs.fill();
+        }
+        return stream;
+    }
+
     private void drawCircle(PDPageContentStream cs, float cx, float cy, float r) throws IOException {
-        float k = 0.5523f;
+        // Magische Zahl für Bézier-Approximation eines Kreises
+        float k = 0.552284749831f * r;
+
         cs.moveTo(cx + r, cy);
-        cs.curveTo(cx + r, cy + r * k, cx + r * k, cy + r, cx, cy + r);
-        cs.curveTo(cx - r * k, cy + r, cx - r, cy + r * k, cx - r, cy);
-        cs.curveTo(cx - r, cy - r * k, cx - r * k, cy - r, cx, cy - r);
-        cs.curveTo(cx + r * k, cy - r, cx + r, cy - r * k, cx + r, cy);
+        cs.curveTo(cx + r, cy + k, cx + k, cy + r, cx, cy + r);      // Quadrant oben rechts
+        cs.curveTo(cx - k, cy + r, cx - r, cy + k, cx - r, cy);      // Quadrant oben links
+        cs.curveTo(cx - r, cy - k, cx - k, cy - r, cx, cy - r);      // Quadrant unten links
+        cs.curveTo(cx + k, cy - r, cx + r, cy - k, cx + r, cy);      // Quadrant unten rechts
         cs.closePath();
+    }
+
+    private PDAppearanceStream createRadioOffAppearance(PDDocument document, PDRectangle rect) throws IOException {
+        PDAppearanceStream stream = new PDAppearanceStream(document);
+        stream.setBBox(new PDRectangle(rect.getWidth(), rect.getHeight()));
+
+        try (PDPageContentStream cs = new PDPageContentStream(document, stream)) {
+            float r = Math.min(rect.getWidth(), rect.getHeight()) / 2 - 1;
+            drawCircle(cs, rect.getWidth()/2, rect.getHeight()/2, r);
+            cs.stroke();
+        }
+        return stream;
     }
 }
 

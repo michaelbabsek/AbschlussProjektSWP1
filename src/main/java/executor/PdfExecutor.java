@@ -4,8 +4,6 @@ import commands.*;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import table.Cell;
@@ -17,17 +15,13 @@ import java.io.IOException;
 import java.util.*;
 import java.util.List;
 
-import static tokens.SymbolType.BULLET;
-import static tokens.SymbolType.DASH;
-
 public class PdfExecutor {
     private final PageConfig config;
-    private PDDocument document;
-    private PDAcroForm acroForm;
+    private final PDDocument document;
     private PDPageContentStream contentStream;
     private PDPage page;
-    private RenderState state;
-    private ComponentFactory componentFactory;
+    private final RenderState state;
+    private final ComponentFactory componentFactory;
     private File outputFile;
     private Table currentTable;
 
@@ -37,7 +31,7 @@ public class PdfExecutor {
         state = new RenderState(config);
 
         document = new PDDocument();
-        acroForm = new PDAcroForm(document);
+        PDAcroForm acroForm = new PDAcroForm(document);
         acroForm.setNeedAppearances(true);
         acroForm.setDefaultAppearance(state.getDefaultAppearance());
 
@@ -78,11 +72,13 @@ public class PdfExecutor {
             case DASH -> "–";
         };
 
-        contentStream.beginText();
-        contentStream.setFont(state.font(), state.fontSize());
-        contentStream.newLineAtOffset(state.x(),  state.y());
-        contentStream.showText(symbol);
-        contentStream.endText();
+        if (cmd.cellRef() != null) {
+            printTextToCell(cmd.cellRef(), symbol);
+            return;
+        }
+
+        Position position = cmd.position() != null? cmd.position() : state.position();
+        printText(position, symbol);
     }
 
     private void executeOutput(OutputCommand cmd) {
@@ -269,15 +265,13 @@ public class PdfExecutor {
 
     private void printTextToCell(CellRef cellRef, String value) throws IOException {
         Cell cell = currentTable.getCell(cellRef);
-        componentFactory.createTextfield(page, cell.position(), cell.size(), value, state.font(), state.fontSize(), state.color());
+        componentFactory.createTextfield(page, cell.position(), cell.size(), value, state.font(), state.fontSize(), state.color(), true);
     }
 
     private void executeTable(TableCommand cmd) throws IOException {
         List<Integer> widths = parseSizes(cmd.widths(), cmd.columns());
         List<Integer> heights = parseSizes(cmd.heights(), cmd.rows());
 
-        System.out.println(widths);
-        System.out.println(heights);
         currentTable = new Table(state.position(), widths, heights, cmd.columns(), cmd.rows());
 
         Color lineColor = cmd.lineColour() != null? ColorHandler.parseColor(cmd.lineColour()) : state.color();
@@ -358,9 +352,8 @@ public class PdfExecutor {
     }
 
     private void createOption(ControlCommand cmd, Size maxSize) throws IOException {
-        float size = componentFactory.createCheckbox(document, page, state.position(), maxSize);
-        state.setPosition(state.x() + size + 2, state.y());
-        printText(state.position(), cmd.content());
+        componentFactory.createCheckbox(document, page, state.position(), maxSize,
+                cmd.content(), state.font(), state.fontSize(), state.color());
     }
 
     private void createRadio(ControlCommand cmd, Size size) throws IOException {
@@ -373,12 +366,8 @@ public class PdfExecutor {
             throw new IllegalArgumentException("Radio without options");
         }
 
-        // Bei Zelle: von oben starten (position ist unten links, also + height)
-        Position startPos = size != null
-                ? new Position(state.x(), state.y() + size.height())
-                : state.position();
-
-        componentFactory.createRadio(document, page, startPos, options, size);
+        componentFactory.createRadio(document, page, state.position(), options, size,
+                state.font(), state.fontSize(), state.color());
     }
     private void createDropdown(ControlCommand cmd, Size size) throws IOException {
         List<String> options = Arrays.stream(cmd.content().split(";"))
@@ -412,7 +401,8 @@ public class PdfExecutor {
                 cmd.content(),
                 state.font(),
                 state.fontSize(),
-                state.color());
+                state.color(),
+                false);
     }
     private void executeNextPage() throws IOException {
         addPage();

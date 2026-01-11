@@ -457,6 +457,7 @@ public class Parser {
         advance();
 
         Position position = null;
+        CellRef cellRef = null;
         SymbolType symbol = null;
 
         while (!isAtEnd()) {
@@ -465,7 +466,12 @@ public class Parser {
             switch (token.type()) {
                 case TokenType.AT -> {
                     advance();
-                    position = parsePosition();
+                    if (check(TokenType.WORD) && ((WordToken) getCurrentToken()).value().equalsIgnoreCase("cell")) {
+                        advance();
+                        cellRef = parseCellRef();
+                    } else {
+                        position = parsePosition();
+                    }
                 }
                 case TokenType.ENUM -> {
                     String enumValue = ((EnumToken) token).value().toUpperCase();
@@ -479,7 +485,7 @@ public class Parser {
         if (symbol == null){
             throw new ParseException("symbol requires type", pos);
         }
-        return new SymbolCommand(position, symbol);
+        return new SymbolCommand(position, cellRef, symbol);
     }
 
 }
