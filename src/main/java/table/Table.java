@@ -7,8 +7,8 @@ import commands.Size;
 import java.util.List;
 
 public class Table {
-    private Position position;
-    private Size size;
+    private final Position position;
+    private final Size size;
     private final int cols;
     private final int rows;
     private Cell[][] cells;
@@ -20,6 +20,8 @@ public class Table {
         this.rows = rows;
         initCells(columnWidths, rowHeights);
     }
+
+    public Size getSize() { return  size; }
 
     public Cell getCell(CellRef cellRef) {
         return cells[cellRef.col()][cellRef.row()];

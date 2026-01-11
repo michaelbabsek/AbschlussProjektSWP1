@@ -64,21 +64,26 @@ public class PdfExecutor {
     }
 
     private void executeSymbol(SymbolCommand cmd) throws IOException {
-        if (cmd.position() != null){
-            state.setPosition(cmd.position().x(), cmd.position().y());
+        if (cmd.position() != null && cmd.cellRef() != null) {
+            throw new RuntimeException("position and cell cannot both be specified");
         }
+
         String symbol= switch (cmd.symbol()){
             case BULLET -> "•";
             case DASH -> "–";
         };
+
+        if (cmd.position() != null){
+            printText(cmd.position(), symbol);
+            return;
+        }
 
         if (cmd.cellRef() != null) {
             printTextToCell(cmd.cellRef(), symbol);
             return;
         }
 
-        Position position = cmd.position() != null? cmd.position() : state.position();
-        printText(position, symbol);
+        printText(state.position(), symbol);
     }
 
     private void executeOutput(OutputCommand cmd) {
@@ -290,6 +295,8 @@ public class PdfExecutor {
                 componentFactory.drawRect(contentStream, rect, lineColor, backgroundColor, cmd.thickness());
             }
         }
+        Size tableSize = currentTable.getSize();
+        state.setPosition(state.position().x() + tableSize.width(), state.position().y() - tableSize.height());
     }
 
     /**
@@ -333,31 +340,38 @@ public class PdfExecutor {
     }
 
     private void executeControl(ControlCommand cmd) throws IOException {
+        if (cmd.position() != null && cmd.cell() != null) {
+            throw new RuntimeException("position and cell cannot both be specified");
+        }
+
         Size maxSize = null;
-        // Position setzen: explizite Position > Cell > aktuelle Position
-        if (cmd.position() != null) {
-            state.setPosition(cmd.position().x(), cmd.position().y());
-        } else if (cmd.cell() != null) {
+        Position position;
+
+        if (cmd.position() == null && cmd.type() == null) {
+            position = state.position();
+        } else if (cmd.position() != null) {
+            position = cmd.position();
+        } else {
             Cell cell = currentTable.getCell(cmd.cell());
             maxSize = cell.size();
-            state.setPosition(cell.position().x(), cell.position().y());
+            position = cell.position();
         }
 
         switch (cmd.type()) {
-            case TEXTBOX -> createTextbox(cmd, maxSize);
-            case DROPDOWN -> createDropdown(cmd, maxSize);
-            case RADIO -> createRadio(cmd, maxSize);
-            case OPTION -> createOption(cmd, maxSize);
+            case TEXTBOX -> createTextbox(cmd.content(), position, maxSize);
+            case DROPDOWN -> createDropdown(cmd.content(), position, maxSize);
+            case RADIO -> createRadio(cmd.content(), position, maxSize);
+            case OPTION -> createOption(cmd.content(), position, maxSize);
         }
     }
 
-    private void createOption(ControlCommand cmd, Size maxSize) throws IOException {
-        componentFactory.createCheckbox(document, page, state.position(), maxSize,
-                cmd.content(), state.font(), state.fontSize(), state.color());
+    private void createOption(String label, Position position, Size maxSize) throws IOException {
+        componentFactory.createCheckbox(document, page, position, maxSize,
+                label, state.font(), state.fontSize(), state.color());
     }
 
-    private void createRadio(ControlCommand cmd, Size size) throws IOException {
-        List<String> options = Arrays.stream(cmd.content().split(";"))
+    private void createRadio(String options, Position position, Size size) throws IOException {
+        List<String> radioOptions = Arrays.stream(options.split(";"))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
@@ -366,11 +380,11 @@ public class PdfExecutor {
             throw new IllegalArgumentException("Radio without options");
         }
 
-        componentFactory.createRadio(document, page, state.position(), options, size,
+        componentFactory.createRadio(document, page, position, radioOptions, size,
                 state.font(), state.fontSize(), state.color());
     }
-    private void createDropdown(ControlCommand cmd, Size size) throws IOException {
-        List<String> options = Arrays.stream(cmd.content().split(";"))
+    private void createDropdown(String options, Position position, Size size) throws IOException {
+        List<String> dropdownOptions = Arrays.stream(options.split(";"))
                 .map(String::trim)
                 .toList();
 
@@ -379,26 +393,25 @@ public class PdfExecutor {
         }
 
         size = size != null? size : new Size(
-                (int) Math.min(getTextWidth(cmd.content()), config.textWidth()),
+                (int) Math.min(getTextWidth(dropdownOptions.stream().max(Comparator.comparingInt(String::length)).get()), config.textWidth()),
                 state.fontSize()
         );
 
-        componentFactory.createDropdown(page, state.position(), size, options, state.getDefaultAppearance());
-        state.setPosition(state.x() + size.width(), state.y());
+        componentFactory.createDropdown(page, position, size, dropdownOptions, state.getDefaultAppearance());
     }
-    private void createTextbox(ControlCommand cmd, Size size) throws IOException {
+    private void createTextbox(String label, Position position, Size size) throws IOException {
 
         size = size != null? size : new Size(
-                (int) Math.min(getTextWidth(cmd.content()), config.textWidth()),
+                (int) Math.min(getTextWidth(label), config.textWidth()),
                 state.fontSize()
         );
 
-        Position position = cmd.position() != null? cmd.position() : state.position();
+        Position pos = position != null? position : state.position();
         componentFactory.createTextfield(
                 page,
                 position,
                 size,
-                cmd.content(),
+                label,
                 state.font(),
                 state.fontSize(),
                 state.color(),
