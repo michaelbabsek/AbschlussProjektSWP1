@@ -4,7 +4,6 @@ import tokens.SymbolType;
 
 public record SymbolCommand(
         Position position,
-        SymbolType symbol,
-        String text
+        SymbolType symbol
 )implements Command {
 }

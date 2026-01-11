@@ -52,18 +52,26 @@ public class ComponentFactory {
         content.stroke();
     }
 
+    private String getDefaultAppearance(String fontName, int fontSize, Color color) {
+        // DefaultAppearance mit aktueller Schriftart, Größe und Farbe
+
+        return String.format(java.util.Locale.US, "/%s %d Tf %.3f %.3f %.3f rg",
+                fontName,
+                fontSize,
+                color.getRed() / 255.0f,
+                color.getGreen() / 255.0f,
+                color.getBlue() / 255.0f
+        );
+    }
+
     void createTextfield(PDPage page, Position position, Size size, String content, PDFont font, int fontSize, Color color) throws IOException {
         // Font zu den gemeinsamen Resources hinzufügen
         resources.put(COSName.getPDFName(font.getName()), font);
 
-        String defaultAppearance = String.format(java.util.Locale.US, "/%s %d Tf %.3f %.3f %.3f rg",
-                font.getName(), fontSize,
-                color.getRed() / 255.0f, color.getGreen() / 255.0f, color.getBlue() / 255.0f);
-
         PDTextField textField = new PDTextField(acroForm);
         textField.setPartialName(UUID.randomUUID().toString());
         textField.setValue(content);
-        textField.setDefaultAppearance(defaultAppearance);
+        textField.setDefaultAppearance(getDefaultAppearance(font.getName(), fontSize, color));
 
         PDAnnotationWidget widget = textField.getWidgets().getFirst();
         PDRectangle rect = new PDRectangle();
@@ -81,17 +89,20 @@ public class ComponentFactory {
 
     /**
      * Erstellt eine Checkbox an der angegebenen Position.
+     * @param maxSize maximale Größe (für Zellen), null für Default
      * @return die Größe der Checkbox (für Positionsupdate)
      */
-    float createCheckbox(PDDocument document, PDPage page, float x, float y) throws IOException {
-        float size = 10;
+    float createCheckbox(PDDocument document, PDPage page, Position position, Size maxSize) throws IOException {
+        float size = maxSize != null
+                ? Math.min(maxSize.width(), maxSize.height())
+                : 10;
 
         PDCheckBox checkBox = new PDCheckBox(acroForm);
         checkBox.setPartialName(UUID.randomUUID().toString());
 
         PDAnnotationWidget widget = checkBox.getWidgets().getFirst();
         widget.setPrinted(true);
-        widget.setRectangle(new PDRectangle(x, y, size, size));
+        widget.setRectangle(new PDRectangle(position.x(), position.y(), size, size));
         widget.setPage(page);
 
         // Appearances selbst generieren für Mac-Kompatibilität
@@ -140,17 +151,21 @@ public class ComponentFactory {
     }
 
     /**
-     * Erstellt Radio-Buttons. Gibt die Größe eines Radio-Buttons zurück.
+     * Erstellt Radio-Buttons.
+     * @param maxSize maximale Größe (für Zellen), null für Default. Höhe wird durch Anzahl Optionen geteilt.
      */
-    float createRadio(PDDocument document, PDPage page, float x, float y, List<String> options, RadioCallback callback) throws IOException {
-        float size = 10;
+    public void createRadio(PDDocument document, PDPage page, Position position, List<String> options, Size maxSize) throws IOException {
+        float size = maxSize != null
+                ? Math.min(maxSize.width(), (float) maxSize.height() / options.size())
+                : 10;
 
         PDRadioButton radio = new PDRadioButton(acroForm);
         radio.setPartialName(UUID.randomUUID().toString());
         radio.setExportValues(options);
 
-        float currentX = x;
-        float currentY = y;
+        // Von oben nach unten zeichnen (Y wird kleiner)
+        float currentX = position.x();
+        float currentY = position.y() - size;  // Erste Position: oben minus eine Größe
 
         for (String option : options) {
             PDAnnotationWidget widget = new PDAnnotationWidget();
@@ -195,24 +210,18 @@ public class ComponentFactory {
             radio.getWidgets().add(widget);
             page.getAnnotations().add(widget);
 
-            // Callback für Text und Position
-            if (callback != null) {
-                callback.onRadioOption(currentX + size + 3, currentY, option);
-                currentY = callback.getNextY();
-                currentX = callback.getNextX();
-            }
+            // Nächste Position (nach unten)
+            currentY -= size;
         }
 
         acroForm.getFields().add(radio);
-        return size;
     }
 
     /**
      * Erstellt eine Dropdown-Box an der angegebenen Position.
-     * @return die Breite der Dropdown-Box
      */
-    float createDropdown(PDPage page, float x, float y, float width, float height,
-                         List<String> options, String defaultAppearance) throws IOException {
+    public void createDropdown(PDPage page, Position position, Size size,
+                               List<String> options, String defaultAppearance) throws IOException {
         PDComboBox comboBox = new PDComboBox(acroForm);
         comboBox.setPartialName(UUID.randomUUID().toString());
         comboBox.setDefaultAppearance(defaultAppearance);
@@ -220,10 +229,10 @@ public class ComponentFactory {
 
         PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
         PDRectangle rect = new PDRectangle();
-        rect.setLowerLeftX(x);
-        rect.setLowerLeftY(y);
-        rect.setUpperRightX(x + width);
-        rect.setUpperRightY(y + height);
+        rect.setLowerLeftX(position.x());
+        rect.setLowerLeftY(position.y());
+        rect.setUpperRightX(position.x() + size.width());
+        rect.setUpperRightY(position.y() + size.height());
 
         widget.setRectangle(rect);
         widget.setPage(page);
@@ -231,7 +240,6 @@ public class ComponentFactory {
         page.getAnnotations().add(widget);
         acroForm.getFields().add(comboBox);
 
-        return width;
     }
 
     // Hilfsmethode für Checkbox Appearance Dictionary
@@ -251,15 +259,6 @@ public class ComponentFactory {
         cs.curveTo(cx - r, cy - r * k, cx - r * k, cy - r, cx, cy - r);
         cs.curveTo(cx + r * k, cy - r, cx + r, cy - r * k, cx + r, cy);
         cs.closePath();
-    }
-
-    /**
-     * Callback-Interface für Radio-Button Positionierung und Text-Rendering
-     */
-    public interface RadioCallback {
-        void onRadioOption(float x, float y, String text) throws IOException;
-        float getNextY();
-        float getNextX();
     }
 }
 

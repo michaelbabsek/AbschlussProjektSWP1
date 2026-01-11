@@ -458,7 +458,6 @@ public class Parser {
 
         Position position = null;
         SymbolType symbol = null;
-        String text= null;
 
         while (!isAtEnd()) {
             Token token = getCurrentToken();
@@ -473,17 +472,14 @@ public class Parser {
                     symbol = SymbolType.valueOf(enumValue);
                     advance();
                 }
-                case TokenType.STRING -> {
-                    text = ((StringToken) token).value();
-                    advance();
-                }
+
                 default -> throw new ParseException("Unexpected token in symbol: " + token, pos);
             }
         }
         if (symbol == null){
             throw new ParseException("symbol requires type", pos);
         }
-        return new SymbolCommand(position, symbol, text);
+        return new SymbolCommand(position, symbol);
     }
 
 }

@@ -4,6 +4,8 @@ import commands.*;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import table.Cell;
@@ -12,9 +14,7 @@ import table.Table;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.*;
 import java.util.List;
 
 import static tokens.SymbolType.BULLET;
@@ -39,7 +39,7 @@ public class PdfExecutor {
         document = new PDDocument();
         acroForm = new PDAcroForm(document);
         acroForm.setNeedAppearances(true);
-        acroForm.setDefaultAppearance(getDefaultAppearance());
+        acroForm.setDefaultAppearance(state.getDefaultAppearance());
 
         // ComponentFactory erstellen und Resources initialisieren
         componentFactory = new ComponentFactory(acroForm);
@@ -75,21 +75,14 @@ public class PdfExecutor {
         }
         String symbol= switch (cmd.symbol()){
             case BULLET -> "•";
-            case DASH -> "-";
-            default -> throw  new IllegalArgumentException("Unknown symbol: " +  cmd.symbol());
+            case DASH -> "–";
         };
 
         contentStream.beginText();
+        contentStream.setFont(state.font(), state.fontSize());
         contentStream.newLineAtOffset(state.x(),  state.y());
         contentStream.showText(symbol);
         contentStream.endText();
-        if (cmd.text() != null){
-            float offset = state.fontSize() * 1.2f; //Abstand nach Symbol
-            state.setPosition(state.x() + offset, state.y());
-            printText(state.position(), cmd.text());
-        }
-
-
     }
 
     private void executeOutput(OutputCommand cmd) {
@@ -131,9 +124,8 @@ public class PdfExecutor {
         float availableWidth = maxX - currentX;
         List<String> result = new LinkedList<>();
 
-        // Echte Newlines durch Leerzeichen ersetzen, nur escaped \n als Zeilenumbruch behandeln
-        String processed = input.replace("\n", " ").replace("\\n", "\n");
-        String[] lines = processed.split("\n", -1);
+        // String an Newlines aufteilen (wurden bereits vom Tokenizer aus \n konvertiert)
+        String[] lines = input.split("\n", -1);
 
         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             String line = lines[lineIndex];
@@ -269,11 +261,10 @@ public class PdfExecutor {
 
         if (cmd.cell() != null) {
             printTextToCell(cmd.cell(), cmd.text());
-        } else {
-            printText(cmd.position(), cmd.text());
+            return;
         }
 
-
+        printText(cmd.position(), cmd.text());
     }
 
     private void printTextToCell(CellRef cellRef, String value) throws IOException {
@@ -348,30 +339,31 @@ public class PdfExecutor {
     }
 
     private void executeControl(ControlCommand cmd) throws IOException {
-        // TODO
+        Size maxSize = null;
+        // Position setzen: explizite Position > Cell > aktuelle Position
         if (cmd.position() != null) {
             state.setPosition(cmd.position().x(), cmd.position().y());
-        }
-        if (cmd.cell() != null) {
-            //richard ist dran kuss
+        } else if (cmd.cell() != null) {
+            Cell cell = currentTable.getCell(cmd.cell());
+            maxSize = cell.size();
+            state.setPosition(cell.position().x(), cell.position().y());
         }
 
         switch (cmd.type()) {
-            case TEXTBOX -> createTextbox(cmd);
-            case DROPDOWN -> createDropdown(cmd);
-            case RADIO -> createRadio(cmd);
-            case OPTION -> createOption(cmd);
+            case TEXTBOX -> createTextbox(cmd, maxSize);
+            case DROPDOWN -> createDropdown(cmd, maxSize);
+            case RADIO -> createRadio(cmd, maxSize);
+            case OPTION -> createOption(cmd, maxSize);
         }
-
     }
 
-    private void createOption(ControlCommand cmd) throws IOException {
-        float size = componentFactory.createCheckbox(document, page, state.x(), state.y());
+    private void createOption(ControlCommand cmd, Size maxSize) throws IOException {
+        float size = componentFactory.createCheckbox(document, page, state.position(), maxSize);
         state.setPosition(state.x() + size + 2, state.y());
         printText(state.position(), cmd.content());
     }
 
-    private void createRadio(ControlCommand cmd) throws IOException {
+    private void createRadio(ControlCommand cmd, Size size) throws IOException {
         List<String> options = Arrays.stream(cmd.content().split(";"))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -381,29 +373,14 @@ public class PdfExecutor {
             throw new IllegalArgumentException("Radio without options");
         }
 
-        componentFactory.createRadio(document, page, state.x(), state.y(), options,
-                new ComponentFactory.RadioCallback() {
-                    @Override
-                    public void onRadioOption(float x, float y, String text) throws IOException {
-                        state.setPosition(x, y);
-                        printText(null, text);
-                        // Position für nächste Option setzen
-                        state.setPosition(config.startX(), state.y() - state.fontSize());
-                    }
+        // Bei Zelle: von oben starten (position ist unten links, also + height)
+        Position startPos = size != null
+                ? new Position(state.x(), state.y() + size.height())
+                : state.position();
 
-                    @Override
-                    public float getNextY() {
-                        return state.y();
-                    }
-
-                    @Override
-                    public float getNextX() {
-                        return config.startX();
-                    }
-                });
+        componentFactory.createRadio(document, page, startPos, options, size);
     }
-
-    private void createDropdown(ControlCommand cmd) throws IOException {
+    private void createDropdown(ControlCommand cmd, Size size) throws IOException {
         List<String> options = Arrays.stream(cmd.content().split(";"))
                 .map(String::trim)
                 .toList();
@@ -412,27 +389,17 @@ public class PdfExecutor {
             throw new IllegalArgumentException("Dropdown without options");
         }
 
-        float width = Math.min(getTextWidth(cmd.content()) + 5, config.textWidth());
-        float height = state.fontSize();
-
-        componentFactory.createDropdown(page, state.x(), state.y(), width, height, options, getDefaultAppearance());
-        state.setPosition(state.x() + width, state.y());
-    }
-
-    private String getDefaultAppearance() {
-        // DefaultAppearance mit aktueller Schriftart, Größe und Farbe
-
-        return String.format(java.util.Locale.US, "/%s %d Tf %.3f %.3f %.3f rg",
-                state.font().getName(),
-                state.fontSize(),
-                state.color().getRed() / 255.0f,
-                state.color().getGreen() / 255.0f,
-                state.color().getBlue() / 255.0f
+        size = size != null? size : new Size(
+                (int) Math.min(getTextWidth(cmd.content()), config.textWidth()),
+                state.fontSize()
         );
-    }
 
-    private void createTextbox(ControlCommand cmd) throws IOException {
-        Size size = new Size(
+        componentFactory.createDropdown(page, state.position(), size, options, state.getDefaultAppearance());
+        state.setPosition(state.x() + size.width(), state.y());
+    }
+    private void createTextbox(ControlCommand cmd, Size size) throws IOException {
+
+        size = size != null? size : new Size(
                 (int) Math.min(getTextWidth(cmd.content()), config.textWidth()),
                 state.fontSize()
         );
@@ -447,13 +414,10 @@ public class PdfExecutor {
                 state.fontSize(),
                 state.color());
     }
-
-
     private void executeNextPage() throws IOException {
         addPage();
         state.resetPosition(config);
     }
-
     private PDImageXObject loadImage(String path) throws IOException {
         try {
             return PDImageXObject.createFromFile(path, document);
@@ -461,57 +425,54 @@ public class PdfExecutor {
             throw new IOException("No Image found " + path);
         }
     }
-
     private void executeImage(ImageCommand cmd) throws IOException {
         PDImageXObject image = loadImage(cmd.filename());
 
-        // Position setzen falls angegeben
         if (cmd.position() != null) {
             state.setPosition(cmd.position().x(), cmd.position().y());
         }
 
-        // Größe bestimmen
+        Size size = calculateImageSize(image, cmd.size());
+        adjustPositionForImage(size.width(), size.height());
+
+        contentStream.drawImage(image, state.x(), state.y() - size.height() + state.fontSize(), size.width(), size.height());
+        state.setPosition(state.x() + size.width(), state.y() - size.height());
+    }
+    private Size calculateImageSize(PDImageXObject image, Size requestedSize) {
         float width = image.getWidth();
         float height = image.getHeight();
 
-        if (cmd.size() != null) {
-            width = cmd.size().width();
-            height = cmd.size().height();
+        if (requestedSize != null) {
+            width = requestedSize.width();
+            height = requestedSize.height();
         }
 
-        // Bild auf textWidth/textHeight skalieren falls zu groß
+        // Auf textWidth/textHeight skalieren falls zu groß
         if (width > config.textWidth() || height > config.textHeight()) {
             double scale = Math.min((double) config.textWidth() / width, (double) config.textHeight() / height);
             width = (float) (width * scale);
             height = (float) (height * scale);
         }
 
-        // Verfügbaren Platz berechnen (vom aktuellen Punkt bis zum rechten/unteren Rand)
-        // NACH der Skalierung!
+        return new Size((int) width, (int) height);
+    }
+    private void adjustPositionForImage(float width, float height) throws IOException {
         float maxX = config.startX() + config.textWidth();
         float minY = config.minY();
         float availableWidth = maxX - state.x();
         float availableHeight = state.y() - minY;
 
-        // Prüfen ob Bild in verfügbaren Platz passt
         if (height > availableHeight) {
-            // Bild passt nicht in verfügbare Höhe -> neue Seite
             addPage();
         } else if (width > availableWidth) {
-            // Bild passt nicht in verfügbare Breite -> neue Zeile versuchen
             state.newLine();
             state.resetX(config);
 
-            // Prüfen ob es nach Zeilenumbruch immer noch nicht passt (Höhe)
             if (state.y() - height < minY) {
                 addPage();
             }
         }
-
-        contentStream.drawImage(image, state.x(), state.y() - height + state.fontSize(), width, height);
-        state.setPosition(state.x() + width, state.y() - height);
     }
-
     private void closeContentStream() throws IOException {
         if (contentStream != null) {
             contentStream.close();

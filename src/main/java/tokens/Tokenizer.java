@@ -174,7 +174,13 @@ public class Tokenizer {
                     }
                 }
             } else {
-                str.append(script.charAt(pos));
+                char c = script.charAt(pos);
+                // Echte Newlines durch Leerzeichen ersetzen, nur \n soll Zeilenumbruch sein
+                if (c == '\n' || c == '\r') {
+                    str.append(' ');
+                } else {
+                    str.append(c);
+                }
                 advance();
             }
         }

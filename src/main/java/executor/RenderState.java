@@ -38,6 +38,11 @@ public class RenderState {
         this.y = y;
     }
 
+    public void setPosition(Position position) {
+        this.x = position.x();
+        this.y = position.y();
+    }
+
     public void newLine() {
         this.y -= leading;
     }
@@ -71,5 +76,17 @@ public class RenderState {
         if (colour != null) {
             this.color = ColorHandler.parseColor(colour);
         }
+    }
+
+    public String getDefaultAppearance() {
+        // DefaultAppearance mit aktueller Schriftart, Größe und Farbe
+
+        return String.format(java.util.Locale.US, "/%s %d Tf %.3f %.3f %.3f rg",
+                font().getName(),
+                fontSize(),
+                color().getRed() / 255.0f,
+                color().getGreen() / 255.0f,
+                color().getBlue() / 255.0f
+        );
     }
 }
