@@ -292,8 +292,8 @@ public class PdfExecutor {
                 Rectangle rect = new Rectangle(
                         (int) cell.position().x(),
                         (int) cell.position().y(),
-                        cell.size().width(),
-                        cell.size().height()
+                        (int) cell.size().width(),
+                        (int) cell.size().height()
                 );
                 componentFactory.drawRect(contentStream, rect, lineColor, backgroundColor, cmd.thickness());
             }
@@ -396,7 +396,7 @@ public class PdfExecutor {
         }
 
         size = size != null? size : new Size(
-                (int) Math.min(getTextWidth(dropdownOptions.stream().max(Comparator.comparingInt(String::length)).get()), config.textWidth()),
+                Math.min(getTextWidth(dropdownOptions.stream().max(Comparator.comparingInt(String::length)).get()), config.textWidth()),
                 state.fontSize()
         );
 
@@ -405,14 +405,14 @@ public class PdfExecutor {
     private void createTextbox(String label, Position position, Size size) throws IOException {
 
         size = size != null? size : new Size(
-                (int) Math.min(getTextWidth(label), config.textWidth()),
+                Math.min(getTextWidth(label), config.textWidth()),
                 state.fontSize()
         );
 
         Position pos = position != null? position : state.position();
         componentFactory.createTextfield(
                 page,
-                position,
+                pos,
                 size,
                 label,
                 state.font(),
@@ -460,7 +460,7 @@ public class PdfExecutor {
             height = (float) (height * scale);
         }
 
-        return new Size((int) width, (int) height);
+        return new Size(width, height);
     }
     private void adjustPositionForImage(float width, float height) throws IOException {
         float maxX = config.startX() + config.textWidth();

@@ -1,3 +1,3 @@
 package commands;
 
-public record Size(int width, int height) {}
+public record Size(float width, float height) {}

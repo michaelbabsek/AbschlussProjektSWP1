@@ -29,8 +29,6 @@ import java.util.UUID;
 public class ComponentFactory {
     private static final int DEFAULT_RADIO_SIZE = 10;
     private static final int DEFAULT_CHECKBOX_SIZE = 10;
-    private static final float CELL_PADDING = 2f;
-    private static final float LABEL_PADDING = 3f;
     private final PDAcroForm acroForm;
     private final PDResources resources;
 
@@ -133,10 +131,10 @@ public class ComponentFactory {
         comboBox.setDefaultValue(options.getFirst());
         comboBox.setOptions(options);
 
-        float boxX = position.x() + CELL_PADDING;
-        float boxY = position.y() + CELL_PADDING;
-        float width = size.width() - CELL_PADDING * 2;
-        float height = size.height() - CELL_PADDING * 2;
+        float boxX = position.x();
+        float boxY = position.y();
+        float width = size.width();
+        float height = size.height();
 
         PDAnnotationWidget widget = comboBox.getWidgets().getFirst();
         widget.setRectangle(new PDRectangle(boxX, boxY, width, height));
@@ -156,8 +154,8 @@ public class ComponentFactory {
     }
 
     // Hilfsfunktion für Textfeld-Breite neben Controls
-    private float calculateLabelWidth(float controlSize, float padding, Size maxSize) {
-        return maxSize != null ? maxSize.width() - controlSize - padding : 100;
+    private float calculateLabelWidth(float controlSize, Size maxSize) {
+        return maxSize != null ? maxSize.width() - controlSize : 100;
     }
 
     void createCheckbox(
@@ -174,9 +172,9 @@ public class ComponentFactory {
         float size = calculateControlSize(fontSize, DEFAULT_CHECKBOX_SIZE, maxSize);
 
         // Position: links oben mit Padding
-        float boxX = position.x() + CELL_PADDING;
+        float boxX = position.x();
         float boxY = maxSize != null
-                ? position.y() + maxSize.height() - size - CELL_PADDING
+                ? position.y() + maxSize.height() - size
                 : position.y();
 
         // Font zu den gemeinsamen Resources hinzufügen
@@ -198,8 +196,8 @@ public class ComponentFactory {
         acroForm.getFields().add(checkBox);
 
         // Label rechts neben Checkbox
-        float textX = boxX + size + LABEL_PADDING;
-        float textWidth = calculateLabelWidth(size, LABEL_PADDING + CELL_PADDING * 2, maxSize);
+        float textX = boxX + size;
+        float textWidth = calculateLabelWidth(size, maxSize);
         createTextfield(page, new Position(textX, boxY), new Size((int) textWidth, (int) size), label, font, fontSize, color, true);
     }
 
@@ -224,11 +222,11 @@ public class ComponentFactory {
         radio.setExportValues(options);
 
         // Start: links oben mit Padding
-        float startX = position.x() + CELL_PADDING;
+        float startX = position.x();
         float currentY = maxSize != null
-                ? position.y() + maxSize.height() - size - CELL_PADDING
+                ? position.y() + maxSize.height() - size
                 : position.y();
-        float textWidth = calculateLabelWidth(size, LABEL_PADDING + CELL_PADDING * 2, maxSize);
+        float textWidth = calculateLabelWidth(size,  maxSize);
 
         for (String option : options) {
             PDAnnotationWidget widget = new PDAnnotationWidget();
@@ -246,7 +244,7 @@ public class ComponentFactory {
             page.getAnnotations().add(widget);
 
             // Label rechts neben Radio
-            float textX = startX + size + LABEL_PADDING;
+            float textX = startX + size;
             createTextfield(page, new Position(textX, currentY), new Size((int) textWidth, (int) size), option, font, fontSize, color, true);
 
             currentY -= size;
