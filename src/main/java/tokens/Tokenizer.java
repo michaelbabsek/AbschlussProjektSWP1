@@ -40,6 +40,9 @@ public class Tokenizer {
             } else if (c == ',') {
                 tokens.add(new SymbolToken(TokenType.COMMA, line, column));
                 advance();
+            } else if (c == '.') {
+                //ignore
+                advance();
             } else {
                 throw new RuntimeException("Unexpected character '" + c + "' at " + line + ":" + column);
             }
@@ -176,6 +179,7 @@ public class Tokenizer {
             } else {
                 char c = script.charAt(pos);
                 // Echte Newlines durch Leerzeichen ersetzen, nur \n soll Zeilenumbruch sein
+
                 if (c == '\n' || c == '\r') {
                     str.append(' ');
                 } else {

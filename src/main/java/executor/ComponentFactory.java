@@ -38,7 +38,13 @@ public class ComponentFactory {
         acroForm.setDefaultResources(resources);
     }
 
-    void drawRect(PDPageContentStream content, Rectangle rect, Color lineColor, Color backgroundColor, Float thickness) throws IOException {
+    void drawRect(
+            PDPageContentStream content,
+            Rectangle rect,
+            Color lineColor,
+            Color backgroundColor,
+            Float thickness
+    ) throws IOException {
         float DEFAULT_THICKNESS = 1.0f;
         float lineWidth = thickness != null ? thickness : DEFAULT_THICKNESS;
 
