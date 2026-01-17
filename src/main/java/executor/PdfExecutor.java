@@ -33,10 +33,13 @@ public class PdfExecutor {
         document = new PDDocument();
         PDAcroForm acroForm = new PDAcroForm(document);
         acroForm.setNeedAppearances(true);
-        acroForm.setDefaultAppearance(state.getDefaultAppearance());
 
         // ComponentFactory erstellen und Resources initialisieren
         componentFactory = new ComponentFactory(acroForm);
+
+        // Initialen Font registrieren (wichtig für Default Appearance)
+        componentFactory.registerFont(state.font());
+        acroForm.setDefaultAppearance(state.getDefaultAppearance());
 
         document.getDocumentCatalog().setAcroForm(acroForm);
         addPage();
@@ -347,7 +350,7 @@ public class PdfExecutor {
         Size maxSize = null;
         Position position;
 
-        if (cmd.position() == null && cmd.type() == null) {
+        if (cmd.position() == null && cmd.cell() == null) {
             position = state.position();
         } else if (cmd.position() != null) {
             position = cmd.position();
@@ -397,7 +400,7 @@ public class PdfExecutor {
                 state.fontSize()
         );
 
-        componentFactory.createDropdown(page, position, size, dropdownOptions, state.getDefaultAppearance());
+        componentFactory.createDropdown(page, position, size, dropdownOptions, state.font(), state.fontSize(), state.color());
     }
     private void createTextbox(String label, Position position, Size size) throws IOException {
 

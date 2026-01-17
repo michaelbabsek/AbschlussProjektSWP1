@@ -10,6 +10,8 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
@@ -36,6 +38,14 @@ public class ComponentFactory {
         this.acroForm = acroForm;
         this.resources = new PDResources();
         acroForm.setDefaultResources(resources);
+    }
+
+    /**
+     * Registriert einen Font in den gemeinsamen Resources.
+     * Muss aufgerufen werden für alle Fonts, die in Default Appearance Strings verwendet werden.
+     */
+    public void registerFont(PDFont font) {
+        resources.put(COSName.getPDFName(font.getName()), font);
     }
 
     void drawRect(
@@ -110,12 +120,16 @@ public class ComponentFactory {
             Position position,
             Size size,
             List<String> options,
-            String defaultAppearance
+            PDFont font,
+            int fontSize,
+            Color color
     ) throws IOException {
+        // Font zu den gemeinsamen Resources hinzufügen
+        resources.put(COSName.getPDFName(font.getName()), font);
 
         PDComboBox comboBox = new PDComboBox(acroForm);
         comboBox.setPartialName(UUID.randomUUID().toString());
-        comboBox.setDefaultAppearance(defaultAppearance);
+        comboBox.setDefaultAppearance(getDefaultAppearance(font.getName(), fontSize, color));
         comboBox.setDefaultValue(options.getFirst());
         comboBox.setOptions(options);
 
@@ -165,6 +179,8 @@ public class ComponentFactory {
                 ? position.y() + maxSize.height() - size - CELL_PADDING
                 : position.y();
 
+        // Font zu den gemeinsamen Resources hinzufügen
+        resources.put(COSName.getPDFName(font.getName()), font);
         PDCheckBox checkBox = new PDCheckBox(acroForm);
         checkBox.setPartialName(UUID.randomUUID().toString());
 
@@ -201,6 +217,8 @@ public class ComponentFactory {
         float sizePerOption = maxSize != null ? maxSize.height() / options.size() : fontSize;
         float size = calculateControlSize(fontSize, DEFAULT_RADIO_SIZE, new Size(0, (int) sizePerOption));
 
+        // Font zu den gemeinsamen Resources hinzufügen
+        resources.put(COSName.getPDFName(font.getName()), font);
         PDRadioButton radio = new PDRadioButton(acroForm);
         radio.setPartialName(UUID.randomUUID().toString());
         radio.setExportValues(options);
