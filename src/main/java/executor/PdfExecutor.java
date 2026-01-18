@@ -77,7 +77,7 @@ public class PdfExecutor {
         };
 
         if (cmd.position() != null){
-            printText(cmd.position(), symbol);
+            printText(cmd.position(), symbol, cmd.alignment());
             return;
         }
 
@@ -86,7 +86,7 @@ public class PdfExecutor {
             return;
         }
 
-        printText(state.position(), symbol);
+        printText(state.position(), symbol, cmd.alignment());
     }
 
     private void executeOutput(OutputCommand cmd) {
@@ -192,9 +192,26 @@ public class PdfExecutor {
         return result;
     }
 
-    private void printText(Position pos, String text) throws IOException {
+    private void printText(Position pos, String text, Alignment alignment) throws IOException {
         if (pos != null) {
             state.setPosition(pos.x(), pos.y());
+        }
+
+        if (alignment != null) {
+            switch (alignment) {
+                case CENTER -> {
+                    float centerX = (config.textWidth() + config.marginX())/ 2.0f - getTextWidth(text) / 2.0f;
+                    centerX = Math.max(state.position().x(), centerX);
+                    state.setPosition(centerX, state.position().y());
+                }
+                case RIGHT -> {
+                    float rightX = config.textWidth() + config.marginX() - getTextWidth(text);
+                    rightX = Math.max(state.position().x(), rightX);
+                    state.setPosition(rightX, state.position().y());
+                }
+                // LEFT is default
+                default -> {}
+            }
         }
 
         List<String> lines = parseLines(text, state.x());
@@ -268,7 +285,7 @@ public class PdfExecutor {
             return;
         }
 
-        printText(cmd.position(), cmd.text());
+        printText(cmd.position(), cmd.text(), cmd.alignment());
     }
 
     private void printTextToCell(CellRef cellRef, String value) throws IOException {

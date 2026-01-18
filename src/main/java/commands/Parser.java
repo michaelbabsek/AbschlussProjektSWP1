@@ -459,6 +459,9 @@ public class Parser {
         Position position = null;
         CellRef cellRef = null;
         SymbolType symbol = null;
+        Alignment alignment = null;
+
+        boolean isAlignment = false;
 
         while (!isAtEnd()) {
             Token token = getCurrentToken();
@@ -473,9 +476,22 @@ public class Parser {
                         position = parsePosition();
                     }
                 }
+
+                case TokenType.WORD -> {
+                    expectString(getCurrentToken(), "alignment");
+                    isAlignment = true;
+                    advance();
+                }
+
                 case TokenType.ENUM -> {
                     String enumValue = ((EnumToken) token).value().toUpperCase();
-                    symbol = SymbolType.valueOf(enumValue);
+
+                    if (isAlignment) {
+                        alignment = Alignment.valueOf(enumValue);
+                        isAlignment = false;
+                    } else {
+                        symbol = SymbolType.valueOf(enumValue);
+                    }
                     advance();
                 }
 
@@ -485,7 +501,7 @@ public class Parser {
         if (symbol == null){
             throw new ParseException("symbol requires type", pos);
         }
-        return new SymbolCommand(position, cellRef, symbol);
+        return new SymbolCommand(position, cellRef, symbol, alignment);
     }
 
 }
