@@ -272,7 +272,20 @@ public class PdfExecutor {
     }
 
     private float getTextWidth(String text) throws IOException {
-        return state.fontSize() * state.font().getStringWidth(text) / 1000.0f;
+        // Handle newlines by splitting and finding the maximum width
+        String[] lines = text.split("\n", -1);
+        float maxWidth = 0;
+
+        for (String line : lines) {
+            // Sanitize the line to remove characters not supported by the font
+            String sanitizedLine = FontHandler.sanitize(line, state.font());
+            if (!sanitizedLine.isEmpty()) {
+                float lineWidth = state.fontSize() * state.font().getStringWidth(sanitizedLine) / 1000.0f;
+                maxWidth = Math.max(maxWidth, lineWidth);
+            }
+        }
+
+        return maxWidth;
     }
 
     private void executePrint(PrintCommand cmd) throws IOException {
