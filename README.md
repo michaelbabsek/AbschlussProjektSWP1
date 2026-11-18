@@ -30,7 +30,7 @@ company boxes are real form fields that can be filled in with any PDF viewer.*
 Maven downloads it automatically.
 
 ```bash
-git clone https://github.com/michaelbabsek/AbschlussProjektSWP1.git
+git clone https://github.com/michaelbabsek/PDF-Generator.git
 cd AbschlussProjektSWP1
 mvn compile exec:java -Dexec.mainClass=Main
 ```
