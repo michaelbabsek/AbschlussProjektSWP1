@@ -6,11 +6,6 @@ fillable form fields.
 The project has its own small language, a hand-written tokenizer and parser, and an executor that
 renders the result with [Apache PDFBox](https://pdfbox.apache.org/). A Swing editor ties it together.
 
-![A registration form generated from a 20-line script](docs/showcase.png)
-
-*The page above comes from [`examples/showcase.txt`](examples/showcase.txt). The name, e-mail and
-company boxes are real form fields that can be filled in with any PDF viewer.*
-
 ---
 
 ## Contents
