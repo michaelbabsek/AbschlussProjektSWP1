@@ -26,7 +26,7 @@ Maven downloads it automatically.
 
 ```bash
 git clone https://github.com/michaelbabsek/PDF-Generator.git
-cd AbschlussProjektSWP1
+cd PDF-Generator/
 mvn compile exec:java -Dexec.mainClass=Main
 ```
 
